@@ -1,0 +1,12 @@
+# 统一行尾，避免整文件 diff 噪音
+# 背景：曾出现过「只改一处文案却显示整文件 335 行变更」的提交，多为行尾不一致所致
+
+* text=auto eol=lf
+
+# 二进制资源不参与换行转换
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.zip binary
