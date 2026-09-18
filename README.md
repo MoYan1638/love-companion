@@ -138,6 +138,7 @@ love-companion/
 | `/恋人保存 [方案名]` | 保存当前人设 |
 | `/恋人方案` | 列出已保存方案 |
 | `/恋人切换 [方案名]` | 切换方案 |
+| `/恋人删除方案 [方案名]` | 删除已保存方案 |
 
 ### 记忆系统
 | 指令 | 功能 |
@@ -152,6 +153,12 @@ love-companion/
 |------|------|
 | `/恋人导出` | 导出JSON配置 |
 | `/恋人导入` | 导入JSON配置 |
+
+### 系统
+| 指令 | 功能 |
+|------|------|
+| `/恋人状态` | 查看当前状态（人设/记忆数/方案数/预设数/存储路径） |
+| `/恋人帮助` | 显示完整指令帮助 |
 
 </details>
 
@@ -209,8 +216,9 @@ export LOVE_COMPANION_DATA_DIR=/your/custom/path
 ### 提交预设人设
 
 1. Fork 本仓库
-2. 在 `references/personas.md` 末尾添加新预设
-3. 在 `scripts/manager.py` 的 `load_preset` 方法中添加对应编号
+2. 在 `references/personas.md` 末尾按 `### 【N号】类型名` 的格式添加新预设（含 `json` 配置块与 `**特点**：` 描述）
+3. 无需改动 `scripts/manager.py`——运行时会自动解析该文件。提交前建议自测：
+   `python scripts/manager.py presets` 能正常列出，且 `python scripts/manager.py apply N` 能套用
 4. 提交 Pull Request
 
 ---
