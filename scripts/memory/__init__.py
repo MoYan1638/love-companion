@@ -9,7 +9,11 @@
 - 短期记忆（会话窗口）与长期记忆（衰减/召回计数/情感效价）
 - 数据主权：单条删除、批量导出、一键清除
 
-状态：M0 骨架占位，尚未实现。
+状态：M2 已实现。
+对外入口（直接按模块导入）：
+    from scripts.memory.store import MemoryStore      # 六类记忆 + 数据主权
+    from scripts.memory.extract import extract_memories  # 无感采集（离线）
+    from scripts.memory.retrieve import top_k, render    # 多路检索 Top-3
 设计约束（红线）：
 - 只依赖 Python 标准库，零外部依赖（Skill 分发的硬性要求）
 - 重活全部离线完成，在线只注入摘要
