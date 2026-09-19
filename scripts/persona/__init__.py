@@ -2,7 +2,7 @@
 """
 伴侣人格克隆（M3a / 阶段3）+ 双向人格镜像（M5 / 阶段5）
 
-模块划分（参考 crush-skills / yourself-skill 的 tools/ + prompts/ 分层）：
+模块划分（按职责分层，解析 / 提取 / 存储 / 编译各管一段）：
 - parser.py    素材解析：微信/QQ/社媒/纯文本 → 统一语料（含隐私脱敏与素材指纹）
 - extract.py   三层提取：声线 / 思维 / 性格 + 5 层人格模型编译
 - library.py   人格库：CRUD、增量 merge、纠偏层、版本回滚、在线摘要编译

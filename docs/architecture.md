@@ -2,7 +2,7 @@
 
 > 依据：《LoveCompanion_开发与优化交接方案》
 > 里程碑拆解见：`../love-companion-v2-里程碑拆解.md`（工作区根目录）
-> 状态：**M0–M8 全部实现**（2026-09）。224 项回归测试全绿，develop 分支。
+> 状态：**M0–M8 全部实现**（2026-09）。296 项回归测试全绿，develop 分支。
 
 ## 实施记录（一句话）
 
@@ -10,31 +10,32 @@
 `scripts/` 从单文件 `manager.py` 长成一套离线引擎，SKILL.md 只承载在线轻注入策略。
 v1 的 8 套人设、`/恋人…` 指令、manager.py API、数据目录全部保留，升级无损可回退。
 
-## 参考开源项目（已按理念实现，复用其规则集与决策逻辑而非整体搬运）
+## 能力全景（各模块解决什么问题）
 
-| 项目 | 借鉴点 | 落地位置 |
+| 能力 | 解决的问题 | 落地位置 |
 |---|---|---|
-| crush-skills | 5 层人格模型（硬规则→身份→话风→情感→行为）、增量 merge、纠偏层、版本回滚 | `scripts/persona/` |
-| yourself-skill | Part A/B 双层结构、增量更新与实时纠错、多源导入 | `scripts/persona/` `scripts/user/` |
-| Agent-Reach | 平台路由 + primary/fallback 故障转移、免 Key 接入 | `scripts/trends/sources.py` |
-| Humanizer | 维基 35 类 AI 写作特征、两轮处理、用户样本匹配 | `scripts/style/humanizer.py` |
-| Ponytail | 「能不注入就不注入」的极简决策阶梯 | `scripts/pipeline/injector.py` |
+| 人格三层提取 | 从聊天记录/日记/社媒里提炼声线、思维、性格，让伴侣说话像本人 | `scripts/persona/extract.py` |
+| 人设适配 | 提取结果一律回写进 v1 `persona.json`，保证人设只有一个真相源 | `scripts/persona/adapt.py` |
+| 人格库进化 | 增量 merge、对话纠偏即时生效、每次更新自动存档可回滚 | `scripts/persona/library.py` |
+| 趋势感知 | 把离线抓到的热点提炼成一句能开口的话题，按可聊度取舍 | `scripts/trends/` |
+| 语气控制 | 回复贴合对方语气，并拦下中文恋爱对话里的 AI 腔 | `scripts/style/` |
+| 双向镜像 | 关系阶段、共鸣、演化建模、一致性自检、元认知反馈 | `scripts/persona/mirror.py` |
+| 极简注入 | 「能不注入就不注入」的分级预算阶梯 | `scripts/pipeline/injector.py` |
 
-## 参考项目的**取舍**——哪些没照抄，以及为什么
+## 设计取舍——为什么这样定，而不是那样
 
-> 用户明确要求：不要照抄参考项目，要按 love-companion 的需求定制。
-> 下表记录被**拒绝**的照搬点，改动前先读，别再抄回去。
+> 下表记录已经**定稿**的关键决策。改动前先读，避免把推翻过的方案又改回来。
 
-| 参考项目的做法 | 为什么不适合 love-companion | 这里的做法 |
+| 备选做法 | 为什么不适合 love-companion | 这里的做法 |
 |---|---|---|
-| crush-skills：另建一套人格文件（5 层人格模型） | v1 已有 `persona.json` 人设体系 + 8 套预设。照搬会出现**两套人设**：`/恋人配置` 改的是 A，蒸馏出来的是 B | 三层提取只是**中间产物**，一律经 `persona/adapt.py` 回写进 v1 字段；在线注入的是 `lover_card()` 编译的**恋人行为卡**（含亲密尺度与内容边界） |
-| crush-skills：「暗恋对象」视角（观察陌生人） | love-companion 是恋人陪伴，且用户已有显式安全设置 | 蒸馏**无权改动**亲密尺度 / 内容边界 / 对用户的称呼（`adapt.IMMUTABLE_FIELDS`） |
-| yourself-skill：双轴法兰镜（另一套组织方式） | 方案 3.3 已规定三层：声线 / 思维 / 性格 | 只取「增量 merge + 实时纠错 + 版本回滚」的机制壳，本体按方案三层来 |
-| Agent-Reach：13+ 平台覆盖的安装器/路由器 | 恋人陪伴不需要全网接入能力，只需要**一句能开口的话**；平台清单没人看得懂也没人用 | 只留 3 个真用得上的源；核心是 `talkability()` 可聊度 + `opener()` 聊天切口，而非平台数量 |
-| Humanizer（英文写作）：维基 35 类 AI 特征 | 英文论文腔的词汇表搬到中文恋爱对话几乎无用 | 词表换成**中文恋爱对话**真正的 AI 腔：空洞安慰、客服式共情、替用户断言情绪、万能陪伴宣言 |
-| 通用多模态：按审美构图配图 | 恋人发图不是配图，是**把此刻的生活递给对方看** | 拍什么由 v1「关心方式」决定，能拍多近由「亲密尺度」决定，不能拍什么由「内容边界」决定 |
+| 另建一套人格文件，与 v1 `persona.json` 并存 | v1 已有 `persona.json` 人设体系 + 8 套预设。两套并存会出现**两个人设**：`/恋人配置` 改的是 A，蒸馏出来的是 B，谁也说不清谁生效 | 三层提取只是**中间产物**，一律经 `persona/adapt.py` 回写进 v1 字段；在线注入的是 `lover_card()` 编译的**恋人行为卡**（含亲密尺度与内容边界） |
+| 把伴侣人格当成对陌生人的观察记录 | love-companion 是恋人陪伴，且用户已有显式安全设置 | 蒸馏**无权改动**亲密尺度 / 内容边界 / 对用户的称呼（`adapt.IMMUTABLE_FIELDS`）；这三样只认用户显式设置 |
+| 用「双轴」等另一套组织方式描述人格 | 方案 3.3 已规定三层：声线 / 思维 / 性格 | 只保留「增量 merge + 实时纠错 + 版本回滚」的机制外壳，本体严格按三层来 |
+| 追求 13+ 平台的抓取覆盖与安装器 | 恋人陪伴不需要全网接入能力，只需要**一句能开口的话**；平台清单没人看得懂也没人用 | 只留 3 个真用得上的源；核心是 `talkability()` 可聊度 + `opener()` 聊天切口，而非平台数量 |
+| 沿用英文写作的 AI 特征词表 | 英文论文腔的词汇表搬到中文恋爱对话几乎无用 | 词表换成**中文恋爱对话**真正的 AI 腔：空洞安慰、客服式共情、替用户断言情绪、万能陪伴宣言 |
+| 按通用审美构图来配图 | 恋人发图不是配图，是**把此刻的生活递给对方看** | 拍什么由 v1「关心方式」决定，能拍多近由「亲密尺度」决定，不能拍什么由「内容边界」决定 |
 
-**love-companion 独有、参考项目里没有的需求**（方案原文，必须守）：
+**love-companion 的硬性需求**（方案原文，必须守）：
 
 - 依恋差异化关怀（方案 4.3）：焦虑型给确定性、回避型给空间、安全型自然陪伴、恐惧型两者都给
   → `care/templates.py::ATTACHMENT_TWEAK`
@@ -126,7 +127,7 @@ love-companion/
     ├── memory/               # M2 记忆系统（store/extract/retrieve）
     ├── persona/              # M3a 人格克隆（parser/extract/library）+ M5 mirror.py
     ├── user/                 # M3b 恋人式用户理解（profile/guide）
-    ├── style/                # M4 语气控制（voice）+ Humanizer 守门（humanizer）
+    ├── style/                # M4 语气贴合（voice）+ AI 腔守门（humanizer）
     ├── care/                 # M6 主动关怀（trigger/templates）
     ├── trends/               # M7a 趋势感知（sources/store）
     ├── multimodal/           # M7b 多模态（image_plan）

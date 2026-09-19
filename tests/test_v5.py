@@ -235,7 +235,7 @@ class TestImagePlanner(TempDataMixin):
         self.assertIn("夜", style["元素"])
 
     def test_style_from_care_style(self):
-        """拍什么由 v1 的关心方式决定（不是参考项目的「价值观 → 审美构图」）"""
+        """拍什么由 v1 的关心方式决定（不是「价值观 → 审美构图」那类通用路子）"""
         persona = {"相处模式": {"关心方式": "细节型关心，会注意你没说的小事"}}
         style = self.planner.style_for(persona, "日常")
         self.assertIn("细小事物", style["主体"])

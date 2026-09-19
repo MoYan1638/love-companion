@@ -3,9 +3,8 @@
 """
 素材解析（M3a）——把聊天记录/日记/社媒导出成统一语料
 
-参考 crush-skills / yourself-skill 的 tools/ 层设计：
-它们用 wechat_parser / qq_parser / social_parser 适配各类导出格式，
-本项目同样只做**解析与清洗**，语义提取交给 extract.py，蒸馏交给 LLM 模板。
+职责单一：微信 / QQ / 社媒 / 纯文本各有各的导出格式，这里统一成一份语料。
+本项目只做**解析与清洗**，语义提取交给 extract.py，蒸馏交给 LLM 模板。
 
 红线：
 - 只依赖标准库

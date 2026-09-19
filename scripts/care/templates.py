@@ -31,7 +31,7 @@ from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens  # noq
 _EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF\U0001F000-\U0001F2FF"
                        "\U00002600-\U000027BF\U0001F1E6-\U0001F1FF]")
 
-# 依恋差异化（方案 4.3 明确要求，love-companion 定制，非参考项目概念）
+# 依恋差异化（方案 4.3 明确要求）
 #   焦虑型 → 给确定性：说清"我在、什么时候、会怎样"，避免模糊与留白
 #   回避型 → 给空间：不追问、不要求回应，来了就聊，不来不催
 #   安全型 → 自然陪伴：平等轻松地聊，不用刻意安抚

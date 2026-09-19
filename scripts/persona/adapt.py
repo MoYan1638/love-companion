@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-v1 人设适配层（love-companion 定制，非参考项目模型）
+v1 人设适配层——把三层提取的结果翻译回 v1 人设字段
 
-**为什么有这个文件**：M3a 的三层提取（声线/思维/性格）是 crush-skills 那一套概念。
-love-companion 本来就有自己的人设体系——`persona.json` 的
+**为什么有这个文件**：M3a 的三层提取（声线/思维/性格）是蒸馏的**中间产物**，
+不是最终存储形态。love-companion 本来就有自己的人设体系——`persona.json` 的
 姓名/性格/对话风格/背景故事/相处模式/亲密尺度/内容边界，
-以及 8 套开箱即用的预设。若照搬参考项目另建一套人格文件，
+以及 8 套开箱即用的预设。如果另外立一套人格文件来存提取结果，
 用户就会面对两套人设：`/恋人配置` 改的是 A，蒸馏出来的是 B，谁也说不清谁生效。
 
 所以本模块只做一件事：**把三层提取的结果翻译回 v1 人设字段**，
@@ -219,7 +219,7 @@ def is_configured(persona: Dict[str, Any]) -> bool:
 def lover_card(persona: Optional[Dict[str, Any]], budget: int = 100) -> str:
     """把 v1 人设编译成在线注入的「恋人行为卡」
 
-    这是 love-companion 自己的形态，**不是** crush-skills 的 5 层人格模型。
+    这是 love-companion 自己的形态：由 v1 人设字段编译，不是三层提取的原始结构。
     没有蒸馏过素材的用户同样能用——8 套预设本身就是完整的 v1 人设。
 
     Args:
