@@ -19,14 +19,33 @@ description: 全AI Agent通用恋人主题陪伴技能。当用户提及恋人�
 
 ## 核心架构
 
-本Skill由4个模块组成，通过标准指令触发：
+**v1 模块（全部保留，向后兼容）**
 
 | 模块 | 文件 | 职责 |
 |------|------|------|
-| [配置管理](#配置管理) | `scripts/manager.py` | 人设配置CRUD、导入导出 |
-| [预设模板](#预设模板) | `references/personas.md` | 8+套开箱即用预设 |
-| [指令清单](#指令清单) | `references/commands.md` | 完整触发指令参考 |
-| [使用指南](#使用指南) | `references/instructions.md` | 详细操作教程 |
+| 配置管理 | `scripts/manager.py` | 人设配置CRUD、导入导出 |
+| 预设模板 | `references/personas.md` | 8+套开箱即用预设 |
+| 指令清单 | `references/commands.md` | 完整触发指令参考 |
+| 使用指南 | `references/instructions.md` | 详细操作教程 |
+
+**v2 模块（Agent 级进化，在线轻注入 + 离线重处理）**
+
+| 模块 | 文件 | 里程碑 | 职责 |
+|------|------|--------|------|
+| 离线管线 | `scripts/pipeline/` | M1/M8 | 任务队列、对话间隙调度、注入器、端到端编排、Token 审计 |
+| 记忆系统 | `scripts/memory/` | M2 | 六类记忆、四路检索、衰减、数据主权 |
+| 伴侣人格克隆 | `scripts/persona/` | M3a | 素材解析、三层提取、人格库、纠偏层、版本回滚 |
+| 恋人式用户理解 | `scripts/user/` | M3b | 流式采集、两级分析、依恋识别、相处指南 |
+| 语气与守门 | `scripts/style/` | M4 | 短句节奏、四档强度、AI 腔三层检测 |
+| 双向人格镜像 | `scripts/persona/mirror.py` | M5 | 关系演化、共鸣、一致性自检、元认知反馈 |
+| 主动关怀 | `scripts/care/` | M6 | 三道闸门、四类信号、声线话术 |
+| 趋势感知 | `scripts/trends/` | M7a | 源路由与故障转移、离线提炼、调味料注入 |
+| 多模态 | `scripts/multimodal/` | M7b | 发图时机、配图风格、图文衔接 |
+| 控制与安全感 | `scripts/panel/` | M7c | 可解释面板、特征权重可调、遗忘某段关系 |
+
+> v2 的唯一在线入口是 `scripts/pipeline/orchestrator.py` 的 `Session`：
+> **回复前 `prepare()` → 回复后 `after_reply()` → 空闲时 `proactive()`**。
+> 其余模块都是离线跑，不占对话时间。
 
 ---
 
@@ -64,6 +83,22 @@ description: 全AI Agent通用恋人主题陪伴技能。当用户提及恋人�
 | `/恋人帮助` | 显示完整指令帮助 |
 | `/恋人关闭` | 关闭恋人模式 |
 
+### v2 新增指令
+
+| 指令 | 功能 |
+|------|------|
+| `/恋人蒸馏 [名字]` | 从聊天记录/日记素材蒸馏出伴侣人格（离线跑，不占对话） |
+| `/恋人人格` | 列出伴侣人格库 |
+| `/恋人纠偏 [不该这样说] → [应该这样说]` | 纠偏层，写入后下一轮立即生效 |
+| `/恋人回滚 [名字] [版本号]` | 人格回滚到历史版本 |
+| `/恋人关系` | 查看关系阶段、亲密度、趋势与共鸣话题 |
+| `/恋人解释` | 可解释面板：上一轮为什么这么说，依据是哪条记忆/哪个人格字段 |
+| `/恋人修正 [特征路径] [0-1]` | 修正 Agent 对你的理解，0 = 别用这条判断 |
+| `/恋人开关 [模块] [开/关]` | 模块开关（记忆系统/人格克隆/主动关怀/趋势感知/多模态…） |
+| `/恋人关怀` | 手动触发一次主动关怀判定 |
+| `/恋人遗忘 [名字]` | 遗忘某段关系：人格 + 关系 + 该关系的记忆一并清除 |
+| `/恋人导出全部` | 导出全部本地数据（设置/记忆/画像/趋势） |
+
 ### 快捷对话指令
 
 | 指令 | 功能 |
@@ -76,6 +111,64 @@ description: 全AI Agent通用恋人主题陪伴技能。当用户提及恋人�
 | `/查看记忆` | 查看当前所有长时记忆 |
 | `/删除记忆 [关键词]` | 删除包含关键词的记忆 |
 | `/恋人尺度 [级别]` | 设置亲密互动尺度（1-5级） |
+
+---
+
+## v2 Agent 级能力（在线调用流程）
+
+> **铁律**：重活一律离线，在线每轮额外开销 **≤500 Token**。
+> 下面三段是 Agent 每轮真正要调的东西，其余都是可选的。
+
+### 1. 回复之前：`prepare()`
+
+```python
+from scripts.pipeline.orchestrator import Session
+s = Session(slug="美美")                    # slug = 伴侣人格库里的名字
+ctx = s.prepare(user_message="今天好累")
+ctx["render"]      # 拼进 System Prompt 的压缩上下文
+ctx["total_tokens"]  # 本轮实际占用，恒 ≤ 500
+```
+
+它会自动做：记忆 Top-3 检索 → 人格摘要编译 → 相处指南编译 → 预算分配与截断 → 记录可解释依据。
+
+### 2. 回复之后：`after_reply()`
+
+```python
+s.after_reply(reply="辛苦了，早点休息呀", user_message="今天好累")
+# → 一致性自检（有没有跑偏出人设）+ AI 腔守门 + 素材入队 + 对话间隙跑离线任务
+```
+
+### 3. 空闲时：`proactive()`
+
+```python
+s.proactive()
+# → {"care": {...}}  该不该主动开口、该说什么
+# → {"image": {...}}  该不该发图、风格参数与图文衔接话术
+```
+
+> ⚠️ **主动消息能否真的发出去，取决于 IM 通道是否支持主动推送**。
+> 通道不支持时，退化为「下次对话开头带一句」，`proactive()` 的话术照常可用。
+
+### Token 预算红线
+
+| 模块 | 单模块上限 | 优先级 |
+|------|-----------|--------|
+| 相处指南 | 200 | 1 |
+| 记忆片段 | 150 | 2 |
+| 人格指令 | 100 | 3 |
+| 关怀话术 | 80 | 4 |
+| 趋势调味料 | 50 | 5 |
+| **合计** | **500（硬约束）** | — |
+
+> 各模块上限之和（580）本就超过红线——这是方案原始数字，已按「总预算封顶 + 优先级分配」
+> 处理：**空模块不占额度**，高优先先拿满，低优先被压缩甚至丢弃。
+> 想复核跑 `python scripts/pipeline/audit.py`。
+
+### 隐私红线
+
+- 用户信号**只落结构化特征**（情绪/话题/句长/emoji），**不落原文**
+- 所有素材入库前过敏感信息脱敏，记忆可单条删、按关系忘、批量导出、一键清除
+- 数据全在 `~/.love-companion/data/`，无云端上传
 
 ---
 
@@ -205,9 +298,20 @@ description: 全AI Agent通用恋人主题陪伴技能。当用户提及恋人�
 默认存储路径：`~/.love-companion/data/`
 
 - `persona.json` - 当前人设配置
-- `memory.json` - 长时记忆存储
+- `memory.json` - 长时记忆存储（v2 结构是 v1 的超集，老版本可直接读）
 - `schemes/` - 多人设方案存储
-- `settings.json` - 全局设置
+- `settings.json` - 全局设置（模块开关、语气强度、特征权重、注入预算）
+
+**v2 新增**
+
+- `personas/` - 伴侣人格库（含 `_versions/` 历史版本，支持回滚）
+- `user_persona.json` / `user_signals.json` - 用户画像与结构化信号（信号不存原文）
+- `relations.json` - 关系演化建模（事件流、阶段、亲密度）
+- `trends.json` / `trend_sources.json` - 趋势知识库与源健康度
+- `care_state.json` - 主动关怀冷却与频次
+- `multimodal.json` - 发图历史
+- `explanations.json` - 可解释面板记录（只存引用关系，不存原文）
+- `queue.json` - 离线任务队列
 
 ### 自定义存储路径
 
@@ -229,6 +333,14 @@ export LOVE_COMPANION_DATA_DIR=/your/custom/path
 - **完整指令**：`references/commands.md`
 - **预设模板**：`references/personas.md`
 - **配置管理逻辑**：`scripts/manager.py`（自动执行，无需手动调用）
+- **v2 架构文档**：`docs/architecture.md`（在线/离线边界、数据 schema、里程碑映射）
+- **v2 运维脚本**：
+  - `python scripts/pipeline/runner.py --enqueue <任务类型> '<JSON>'` 入队离线任务
+  - `python scripts/pipeline/runner.py` 对话间隙排空队列
+  - `python scripts/pipeline/audit.py` Token 预算审计与压测
+  - `python scripts/pipeline/orchestrator.py --status` 查看当前状态
+  - `python scripts/migrate/migrate_v1.py --dry-run` 预演 v1→v2 迁移
+- **测试**：`python -m unittest discover -s tests`（224 项回归）
 
 ---
 

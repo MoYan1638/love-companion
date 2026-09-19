@@ -77,7 +77,10 @@ class Injector:
               "budget": 总预算,
             }
         """
-        quota = schema.allocate_budget(self.total_budget)
+        # 只为「本轮真的有内容」的模块分配额度：空模块不占预算，
+        # 否则高优先模块即使没内容也会把低优先模块挤成 0
+        active = [k for k in schema.INJECTION_PRIORITY if (self.sections.get(k) or "").strip()]
+        quota = schema.allocate_budget(self.total_budget, keys=active)
         sections: Dict[str, str] = {}
         tokens: Dict[str, int] = {}
         truncated: List[str] = []

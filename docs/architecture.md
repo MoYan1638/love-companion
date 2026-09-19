@@ -1,8 +1,24 @@
-# Love Companion v2 架构设计（M0）
+# Love Companion v2 架构设计
 
 > 依据：《LoveCompanion_开发与优化交接方案》
 > 里程碑拆解见：`../love-companion-v2-里程碑拆解.md`（工作区根目录）
-> 状态：M0 骨架已落地，模块实现按里程碑推进
+> 状态：**M0–M8 全部实现**（2026-09）。224 项回归测试全绿，develop 分支。
+
+## 实施记录（一句话）
+
+形态仍是 Skill 包（SKILL.md + references/ + scripts/），向 Agent 级进化：
+`scripts/` 从单文件 `manager.py` 长成一套离线引擎，SKILL.md 只承载在线轻注入策略。
+v1 的 8 套人设、`/恋人…` 指令、manager.py API、数据目录全部保留，升级无损可回退。
+
+## 参考开源项目（已按理念实现，复用其规则集与决策逻辑而非整体搬运）
+
+| 项目 | 借鉴点 | 落地位置 |
+|---|---|---|
+| crush-skills | 5 层人格模型（硬规则→身份→话风→情感→行为）、增量 merge、纠偏层、版本回滚 | `scripts/persona/` |
+| yourself-skill | Part A/B 双层结构、增量更新与实时纠错、多源导入 | `scripts/persona/` `scripts/user/` |
+| Agent-Reach | 平台路由 + primary/fallback 故障转移、免 Key 接入 | `scripts/trends/sources.py` |
+| Humanizer | 维基 35 类 AI 写作特征、两轮处理、用户样本匹配 | `scripts/style/humanizer.py` |
+| Ponytail | 「能不注入就不注入」的极简决策阶梯 | `scripts/pipeline/injector.py` |
 
 ---
 
@@ -65,22 +81,33 @@ love-companion/
 ├── docs/
 │   └── architecture.md       # 本文件
 ├── tests/
-│   └── test_manager.py       # 回归测试：v1 能力 + v2 schema/迁移
+│   ├── test_manager.py       # v1 能力 + v2 schema/迁移（20 项）
+│   ├── test_v2.py            # M1 + M2
+│   ├── test_v3.py            # M3b + M4
+│   ├── test_v4.py            # M3a + M5 + M6
+│   ├── test_v5.py            # M7a + M7b + M7c
+│   └── test_v6.py            # M8 联调与压测
 └── scripts/
     ├── manager.py            # v1 配置与记忆管理（保留，向后兼容）
     ├── core/
-    │   └── schema.py         # v2 数据 schema：记忆/画像/人格库/设置
+    │   ├── schema.py         # v2 数据 schema：记忆/画像/人格库/设置/预算
+    │   └── privacy.py        # 隐私过滤（手机号/身份证/银行卡/邮箱/微信号…）
     ├── migrate/
     │   └── migrate_v1.py     # v1→v2 数据迁移（自带备份，无损可回退）
-    ├── pipeline/             # M1 离线管线 + 注入器
-    ├── memory/               # M2 记忆系统
-    ├── persona/              # M3a 伴侣人格克隆
-    ├── user/                 # M3b 恋人式用户理解
-    ├── style/                # M4 交流语气 + Humanizer 守门
-    ├── care/                 # M6 主动关怀
-    ├── trends/               # M7a 趋势感知
-    ├── multimodal/           # M7b 多模态
-    └── panel/                # M7c 控制与安全感
+    ├── pipeline/
+    │   ├── queue.py          # M1 任务队列：优先级 · 重试 · 死信
+    │   ├── injector.py       # M1 注入器：预算硬约束，超限截断/丢弃
+    │   ├── runner.py         # M1 对话间隙调度（run_idle）+ 任务注册表
+    │   ├── orchestrator.py   # M8 端到端编排：prepare → after_reply → proactive
+    │   └── audit.py          # M8 Token 审计与最坏情况压测
+    ├── memory/               # M2 记忆系统（store/extract/retrieve）
+    ├── persona/              # M3a 人格克隆（parser/extract/library）+ M5 mirror.py
+    ├── user/                 # M3b 恋人式用户理解（profile/guide）
+    ├── style/                # M4 语气控制（voice）+ Humanizer 守门（humanizer）
+    ├── care/                 # M6 主动关怀（trigger/templates）
+    ├── trends/               # M7a 趋势感知（sources/store）
+    ├── multimodal/           # M7b 多模态（image_plan）
+    └── panel/                # M7c 控制与安全感（explain/controls）
 ```
 
 ---
@@ -112,35 +139,62 @@ love-companion/
 
 ---
 
-## 七、里程碑映射
+## 七、里程碑映射与完成状态
 
-| 模块 | 里程碑 | 方案阶段 | 优先级 |
+| 模块 | 里程碑 | 方案阶段 | 优先级 | 状态 |
+|---|---|---|---|---|
+| pipeline/（队列·注入器·调度） | M1 | 阶段 1 | P0 | ✅ |
+| memory/ | M2 | 阶段 2 | P0 | ✅ |
+| persona/（克隆） | M3a | 阶段 3 | P0 | ✅ |
+| user/ | M3b | 阶段 4 | P0 | ✅ |
+| style/ | M4 | 阶段 6 | P0 | ✅ |
+| persona/mirror.py（融合 persona × user） | M5 | 阶段 5 | P0 | ✅ |
+| care/ | M6 | 阶段 7 | P0 | ✅ |
+| trends/ | M7a | 阶段 8 | P1 | ✅ |
+| multimodal/ | M7b | 阶段 9 | P1 | ✅ |
+| panel/ | M7c | 阶段 10 | P1 | ✅ |
+| pipeline/orchestrator.py + audit.py（联调） | M8 | — | P0 | ✅ |
+
+---
+
+## 八、技术决策（实施时已拍板）
+
+| # | 决策点 | 结论 | 理由 |
 |---|---|---|---|
-| pipeline/ | M1 | 阶段 1 | P0 |
-| memory/ | M2 | 阶段 2 | P0 |
-| persona/ | M3a | 阶段 3 | P0 |
-| user/ | M3b | 阶段 4 | P0 |
-| style/ | M4 | 阶段 6 | P0 |
-| （融合：persona × user） | M5 | 阶段 5 | P0 |
-| care/ | M6 | 阶段 7 | P0 |
-| trends/ multimodal/ panel/ | M7 | 阶段 8/9/10 | P1 |
+| 1 | 记忆语义检索选型 | 零依赖打分（字符重叠 + 时间 + 重要性 + 关系路径） | 不能要求用户装第三方库 |
+| 2 | 依恋 / 情绪识别 | 可解释的规则引擎 | 能给用户看「为什么这么判断」，也便于 `/恋人修正` 覆盖 |
+| 3 | 三个开源依赖接入方式 | **按理念自研**，复用其规则集与决策逻辑 | 拿不到可直接嵌入的源码；自研保证零依赖与可维护 |
+| 4 | 多模态图片来源 | 本模块只产出**配图规格 + 提示词 + 衔接话术**，出图交给上层图像能力 | 保持零依赖，审美由人格字段决定而非临场发挥 |
+| 5 | 离线管线触发方式 | **对话间隙自动跑**（用户拍板） | 单次调用有上限（默认 8 个任务），绝不让离线活儿拖慢对话 |
+| 6 | 方案 Token 数字冲突 | 单模块上限降级为「最多能给多少」，**总预算 500 为硬约束**，空模块不占额度 | 原表 580 > 红线 500，两者无法同时成立 |
 
 ---
 
-## 八、待拍板的技术决策（影响 M2 起的实现）
+## 九、已知外部约束（不是代码能解决的）
 
-1. 记忆语义检索选型：TF-IDF（零依赖）vs sqlite-vec / faiss
-2. 依恋 / 情绪识别：规则引擎 vs 本地小模型
-3. 开源依赖接入方式：crush-cupid / yourself-skill / Agent-Reach 拿源码改造，还是按理念自研
-4. 多模态图片来源（AI 生成 / 图库）与 IM 通道发图能力
-5. 离线管线触发方式：定时任务 vs 对话间隙
+1. **主动消息**：`care/` 与 `multimodal/` 的「主动开口 / 主动发图」能否真的发出去，
+   取决于 IM 通道是否支持主动推送。不支持时退化为「下次对话开头带一句」。
+2. **趋势抓取**：`trends/sources.py` 只产出抓取计划（primary + fallback 链），
+   不发网络请求——小红书/B站/微博都需要登录态或 JS 渲染，标准库抓不到。
+   抓回来的原文交给 `trends/store.py` 离线提炼。
+3. **人格蒸馏质量**：规则层提取可复现，但语义层蒸馏仍依赖 LLM 按模板跑。
+   语料量越大置信度越高（`置信度 ≈ 语料量/200`）。
 
 ---
 
-## 九、测试
+## 十、测试
 
-`python tests/test_manager.py`
+```bash
+python -m unittest discover -s tests -t .
+```
 
-覆盖范围：预设解析（8 套与文档逐字段一致）、2 号称呼回归、缓存隔离、坏 JSON 报错定位、
-方案与记忆 CRUD、CLI 冒烟、v2 schema 校验、注入预算红线、**v1→v2 迁移无损与向下兼容**。
+| 文件 | 覆盖 |
+|---|---|
+| `test_manager.py` | v1 能力回归：8 套预设逐字段一致、称呼回归、缓存隔离、坏 JSON 定位、方案与记忆 CRUD、CLI 冒烟；v2 schema 校验、预算红线、v1→v2 迁移无损与向下兼容 |
+| `test_v2.py` | M1 管线（队列/重试/死信）+ M2 记忆（采集脱敏/检索/衰减/数据主权） |
+| `test_v3.py` | M3b 用户理解（流式信号/两级分析/依恋识别/相处指南）+ M4 语气与 Humanizer 三层守门 |
+| `test_v4.py` | M3a 人格克隆（三种导出排版/三层提取/merge/纠偏/版本回滚）+ M5 镜像（演化/共鸣/一致性/反馈）+ M6 关怀（三道闸门/四类信号/声线话术） |
+| `test_v5.py` | M7a 趋势（源路由/故障转移/提炼/预算）+ M7b 配图（闸门/风格/衔接）+ M7c（可解释/权重/遗忘/导出清除） |
+| `test_v6.py` | M8 联调：端到端一轮、模块开关生效、预算压测、全链路溯源与纠偏生效 |
+
 全程使用临时数据目录，不触碰用户真实数据。

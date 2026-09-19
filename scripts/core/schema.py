@@ -41,11 +41,16 @@ DEFAULT_INJECTION_BUDGET = {
 INJECTION_PRIORITY = ("相处指南", "记忆片段", "人格指令", "关怀话术", "趋势调味料")
 
 
-def allocate_budget(total: Optional[int] = None) -> Dict[str, int]:
+def allocate_budget(total: Optional[int] = None,
+                    keys: Optional[List[str]] = None) -> Dict[str, int]:
     """按优先级分配单轮注入预算，返回各模块可用额度
 
     Args:
         total: 本轮总预算，默认取 DEFAULT_INJECTION_BUDGET["合计上限"]
+        keys: 本轮**实际有内容**的模块（按优先级给出）。
+              不传则按全部模块分配——那样低优先模块会被压到 0；
+              传入时只为这些模块分配，空模块不占额度，避免
+              「没内容的高优先模块白占预算，把有内容的低优先模块挤掉」。
 
     Returns:
         {"相处指南": 200, "记忆片段": 150, ..., "合计上限": total}
@@ -54,8 +59,8 @@ def allocate_budget(total: Optional[int] = None) -> Dict[str, int]:
     total = int(total if total is not None else DEFAULT_INJECTION_BUDGET["合计上限"])
     remaining = total
     result: Dict[str, int] = {}
-    for key in INJECTION_PRIORITY:
-        size = min(int(DEFAULT_INJECTION_BUDGET[key]), remaining)
+    for key in (keys if keys is not None else INJECTION_PRIORITY):
+        size = min(int(DEFAULT_INJECTION_BUDGET.get(key, 0)), remaining)
         result[key] = max(0, size)
         remaining -= result[key]
     result["合计上限"] = total
