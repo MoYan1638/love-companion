@@ -217,6 +217,9 @@ def settings_template() -> Dict[str, Any]:
             "多模态": False, "可解释面板": True,
         },
         "语气强度": "标准",           # 关闭 / 轻柔 / 标准 / 深度（M4）
+        # 用户手动修正的特征权重（M7c）：{"沟通风格.句式长度": 0.8, ...}
+        # 用于覆盖自动推断结果，值域 0–1，越大越可信
+        "特征权重": {},
         "注入预算": dict(DEFAULT_INJECTION_BUDGET),
         "衰减参数": dict(DEFAULT_DECAY),
         "隐私": {"采集开关": True, "本地存储": True, "允许溯源片段": True},

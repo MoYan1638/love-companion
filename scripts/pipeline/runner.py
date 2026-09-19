@@ -191,6 +191,54 @@ def _task_care_evaluate(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[st
             "hint": verdict.get("next_hint", ""), "text": out["text"], "tokens": out["tokens"]}
 
 
+@register("trends.plan")
+def _task_trends_plan(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """产出抓取计划（primary + fallback 链）；payload.failed 用于上报上一个源挂了"""
+    from scripts.trends.sources import SourceRouter
+    router = SourceRouter(ctx["data_dir"])
+    if payload.get("failed"):
+        router.mark(payload["failed"], False)
+    return router.plan(payload.get("topic", ""), payload.get("keyword"))
+
+
+@register("trends.ingest")
+def _task_trends_ingest(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """把抓回来的原文离线提炼成要点入库（原文不进上下文）"""
+    from scripts.trends.sources import SourceRouter
+    from scripts.trends.store import TrendStore
+
+    source = payload.get("source", "")
+    result = TrendStore(ctx["data_dir"]).ingest(
+        payload.get("raw", ""), payload.get("topic", ""), source)
+    # 抓到了算成功，一条都提炼不出来算这个源挂了（影响下次排程）
+    if source:
+        SourceRouter(ctx["data_dir"]).mark(source, bool(result.get("added")))
+    return result
+
+
+@register("image.plan")
+def _task_image_plan(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """产出配图计划（时机 + 风格 + 衔接话术），不实际生成图片"""
+    from scripts.multimodal.image_plan import ImagePlanner
+    planner = ImagePlanner(ctx["data_dir"], config=payload.get("config"))
+    out = planner.plan(payload.get("slug", ""), mood=payload.get("mood", "日常"),
+                       data_dir=ctx["data_dir"])
+    if out.get("should") and not payload.get("dry_run"):
+        planner.mark_sent(payload.get("mood", "日常"), out.get("caption", ""))
+    else:
+        planner.tick(False)
+    return out
+
+
+@register("panel.explain")
+def _task_panel_explain(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """记录本轮注入了什么、依据是什么（只存引用关系，不存原文）"""
+    from scripts.panel.explain import ExplainPanel
+    panel = ExplainPanel(ctx["data_dir"])
+    entry = panel.record(payload.get("sections") or {}, slug=payload.get("slug", ""))
+    return {"ok": True, "sections": sorted(entry["sections"]), "evidence": entry["evidence"]}
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="对话间隙离线任务调度")
     parser.add_argument("--data-dir", default=os.environ.get("LOVE_COMPANION_DATA_DIR", "~/.love-companion/data"))
