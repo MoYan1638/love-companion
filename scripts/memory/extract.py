@@ -14,9 +14,16 @@
 """
 
 import re
+import sys
+from pathlib import Path
 from typing import Any, Dict, List
 
-from scripts.core.privacy import filter_text, has_sensitive
+# 允许 `python scripts/memory/extract.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from scripts.core.privacy import filter_text, has_sensitive  # noqa: E402
 
 # 六类记忆的触发规则：(类型, 正则, 基础重要度, 情感效价)
 # 说明：规则刻意保守，宁可漏记也不误记

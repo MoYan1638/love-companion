@@ -14,17 +14,21 @@
 """
 
 import json
-import os
 import re
+import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from scripts.core import privacy, schema
+# 允许 `python scripts/user/profile.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-DEFAULT_DATA_DIR = "~/.love-companion/data"
-ENV_DATA_DIR = "LOVE_COMPANION_DATA_DIR"
+from scripts.core import privacy, schema  # noqa: E402
+from scripts.core import settings as core_settings  # noqa: E402
+from scripts.core.storage import read_json, write_json  # noqa: E402
 
 LIGHT_INTERVAL = 5
 DEEP_INTERVAL = 50
@@ -82,8 +86,7 @@ class UserProfileStore:
     """用户画像存储与两级分析"""
 
     def __init__(self, data_dir: Optional[str] = None):
-        resolved = data_dir or os.environ.get(ENV_DATA_DIR) or DEFAULT_DATA_DIR
-        self.data_dir = Path(os.path.expanduser(str(resolved)))
+        self.data_dir = core_settings.resolve_data_dir(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.persona_file = self.data_dir / "user_persona.json"
         self.stream_file = self.data_dir / "user_signals.json"
@@ -91,26 +94,19 @@ class UserProfileStore:
     # ---------- 存储 ----------
 
     def _load_persona(self) -> Dict[str, Any]:
-        if self.persona_file.exists():
-            with open(self.persona_file, "r", encoding="utf-8") as f:
-                return json.load(f)
-        return schema.user_persona_template()
+        data = read_json(self.persona_file, None)
+        return data if isinstance(data, dict) else schema.user_persona_template()
 
     def _save_persona(self, persona: Dict[str, Any]) -> None:
         persona["updated_at"] = _now()
-        with open(self.persona_file, "w", encoding="utf-8") as f:
-            json.dump(persona, f, ensure_ascii=False, indent=2)
+        write_json(self.persona_file, persona)
 
     def _load_signals(self) -> List[Dict[str, Any]]:
-        if self.stream_file.exists():
-            with open(self.stream_file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            return data if isinstance(data, list) else []
-        return []
+        data = read_json(self.stream_file, [])
+        return data if isinstance(data, list) else []
 
     def _save_signals(self, signals: List[Dict[str, Any]], keep: int = 500) -> None:
-        with open(self.stream_file, "w", encoding="utf-8") as f:
-            json.dump(signals[-keep:], f, ensure_ascii=False)
+        write_json(self.stream_file, signals[-keep:])
 
     # ---------- 采集 ----------
 

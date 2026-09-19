@@ -11,13 +11,18 @@
 """
 
 import json
-import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-DEFAULT_DATA_DIR = "~/.love-companion/data"
-ENV_DATA_DIR = "LOVE_COMPANION_DATA_DIR"
+# 允许 `python scripts/panel/explain.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from scripts.core import settings as core_settings  # noqa: E402
+from scripts.core.storage import read_json, write_json  # noqa: E402
 
 # 各注入段的依据来源说明（人类可读）
 SECTION_ORIGIN: Dict[str, str] = {
@@ -40,8 +45,7 @@ def build_evidence(sections: Dict[str, str], data_dir: Optional[str] = None,
     Returns:
         {"记忆片段": ["#3 用户喜欢三分糖奶茶", ...], "人格指令": ["声线.口头禅", ...], ...}
     """
-    resolved = data_dir or os.environ.get(ENV_DATA_DIR) or "~/.love-companion/data"
-    base = Path(os.path.expanduser(str(resolved)))
+    base = core_settings.resolve_data_dir(data_dir)
     evidence: Dict[str, List[str]] = {}
 
     if "记忆片段" in sections:
@@ -91,22 +95,17 @@ class ExplainPanel:
     """解释记录的存取与渲染"""
 
     def __init__(self, data_dir: Optional[str] = None):
-        resolved = data_dir or os.environ.get(ENV_DATA_DIR) or DEFAULT_DATA_DIR
-        self.data_dir = Path(os.path.expanduser(str(resolved)))
+        self.data_dir = core_settings.resolve_data_dir(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.file = self.data_dir / "explanations.json"
         self.keep = 50
 
     def _load(self) -> List[Dict[str, Any]]:
-        if not self.file.exists():
-            return []
-        with open(self.file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        data = read_json(self.file, [])
         return data if isinstance(data, list) else []
 
     def _save(self, entries: List[Dict[str, Any]]) -> None:
-        with open(self.file, "w", encoding="utf-8") as f:
-            json.dump(entries[-self.keep:], f, ensure_ascii=False, indent=2)
+        write_json(self.file, entries[-self.keep:])
 
     def record(self, sections: Dict[str, str], evidence: Optional[Dict[str, List[str]]] = None,
                slug: str = "", reply: str = "") -> Dict[str, Any]:

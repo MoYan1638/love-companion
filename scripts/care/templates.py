@@ -14,11 +14,19 @@
 
 import hashlib
 import re
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from scripts.core import schema
-from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens
+# 允许 `python scripts/care/templates.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from scripts.core import schema  # noqa: E402
+from scripts.core import settings as core_settings  # noqa: E402
+from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens  # noqa: E402
 
 _EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF\U0001F000-\U0001F2FF"
                        "\U00002600-\U000027BF\U0001F1E6-\U0001F1FF]")
@@ -51,16 +59,6 @@ ATTACHMENT_TWEAK: Dict[str, Dict[str, Any]] = {
     },
     "未知": {"后缀": [], "禁忌": [], "语气": "自然"},
 }
-
-
-def attachment_of(data_dir: Optional[str] = None) -> str:
-    """读用户画像里的依恋类型（读不到就当未知，不打断关怀）"""
-    try:
-        from scripts.user.profile import UserProfileStore
-        att = (UserProfileStore(data_dir).get().get("依恋类型") or {}).get("判断")
-        return att if att in ATTACHMENT_TWEAK else "未知"
-    except Exception:  # noqa: BLE001
-        return "未知"
 
 
 def apply_attachment(text: str, attachment: str, seed: int = 0) -> str:
@@ -174,6 +172,10 @@ def render(kind: str, nickname: str = "", detail: str = "",
     if seed is None:
         seed = datetime.now().day
 
+    # 未知类型不硬凑——宁肯不发，也不能把「在吗。」这种话发给用户
+    if kind not in TEMPLATES:
+        return ""
+
     template = pick_template(kind)
     nick = nickname or ""
     fill = (detail or "").strip() or FALLBACK_DETAIL.get(kind, "")
@@ -209,9 +211,13 @@ def compose(kind: str, slug: str, data_dir: Optional[str] = None,
 
     Returns:
         {"kind":..., "text":..., "tokens":..., "budget":..., "used_detail": str}
+        未知 kind 时 text 为空串，调用方据此决定不发送。
     """
     from scripts.persona.library import PersonaLibrary
     from scripts.user.profile import UserProfileStore
+
+    if budget is None:
+        budget = core_settings.budget(data_dir, "关怀话术")
 
     lib = PersonaLibrary(data_dir)
     persona = lib.get(slug) or {}
@@ -236,8 +242,7 @@ def compose(kind: str, slug: str, data_dir: Optional[str] = None,
         "kind": kind,
         "text": text,
         "tokens": estimate_tokens(text),
-        "budget": int(budget if budget is not None
-                      else schema.DEFAULT_INJECTION_BUDGET["关怀话术"]),
+        "budget": int(budget),
         "used_detail": detail or FALLBACK_DETAIL.get(kind, ""),
         "attachment": attachment,
     }

@@ -15,9 +15,16 @@
 
 import math
 import re
+import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from scripts.core import schema
+# 允许 `python scripts/pipeline/injector.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from scripts.core import schema  # noqa: E402
 
 _CJK = re.compile(r"[\u4e00-\u9fff\u3400-\u4dbf]")
 
@@ -52,16 +59,21 @@ def truncate_to_tokens(text: str, limit: int) -> str:
 class Injector:
     """注入摘要汇总与预算控制"""
 
-    def __init__(self, total_budget: Optional[int] = None, sections: Optional[Dict[str, str]] = None):
+    def __init__(self, total_budget: Optional[int] = None,
+                 caps: Optional[Dict[str, int]] = None,
+                 sections: Optional[Dict[str, str]] = None):
+        # caps：各模块上限表。默认常量；用户调过 settings.json 时
+        # 由调用方（orchestrator）传入 core/settings.budget_map() 的结果
+        self.caps = dict(caps or schema.DEFAULT_INJECTION_BUDGET)
         self.total_budget = int(
-            total_budget if total_budget is not None else schema.DEFAULT_INJECTION_BUDGET["合计上限"]
+            total_budget if total_budget is not None else self.caps["合计上限"]
         )
         self.sections: Dict[str, str] = dict(sections or {})
 
     def add(self, key: str, text: str) -> None:
         """添加一个注入段；key 需为预算表中的模块名"""
-        if key not in schema.DEFAULT_INJECTION_BUDGET:
-            raise KeyError(f"未登记的注入段 {key!r}，预算表只有：{list(schema.DEFAULT_INJECTION_BUDGET)}")
+        if key not in self.caps:
+            raise KeyError(f"未登记的注入段 {key!r}，预算表只有：{list(self.caps)}")
         self.sections[key] = text or ""
 
     def build(self) -> Dict[str, Any]:
@@ -80,7 +92,7 @@ class Injector:
         # 只为「本轮真的有内容」的模块分配额度：空模块不占预算，
         # 否则高优先模块即使没内容也会把低优先模块挤成 0
         active = [k for k in schema.INJECTION_PRIORITY if (self.sections.get(k) or "").strip()]
-        quota = schema.allocate_budget(self.total_budget, keys=active)
+        quota = schema.allocate_budget(self.total_budget, keys=active, caps=self.caps)
         sections: Dict[str, str] = {}
         tokens: Dict[str, int] = {}
         truncated: List[str] = []

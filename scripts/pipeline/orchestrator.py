@@ -25,7 +25,7 @@ _ROOT = Path(__file__).resolve().parents[2]
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
 
-from scripts.core import schema  # noqa: E402
+from scripts.core import settings as core_settings  # noqa: E402
 from scripts.pipeline.injector import Injector  # noqa: E402
 
 DEFAULT_DATA_DIR = "~/.love-companion/data"
@@ -40,8 +40,7 @@ class Session:
     """一轮对话的编排"""
 
     def __init__(self, slug: str = "", data_dir: Optional[str] = None):
-        resolved = data_dir or os.environ.get(ENV_DATA_DIR) or DEFAULT_DATA_DIR
-        self.data_dir = str(Path(os.path.expanduser(str(resolved))))
+        self.data_dir = str(core_settings.resolve_data_dir(data_dir))
         self.slug = slug
 
     # ---------- 内部小工具 ----------
@@ -74,7 +73,9 @@ class Session:
               "memory_ids": [...],   # 被召回的记忆 id（用于 mark）
             }
         """
-        inj = Injector()
+        # 预算真读 settings.json：用户在「控制与安全感」里调过的额度会生效
+        caps = core_settings.budget_map(self.data_dir)
+        inj = Injector(total_budget=int(caps["合计上限"]), caps=caps)
         memory_ids: List[int] = []
 
         # 记忆片段（M2）：语义 + 时间 + 重要性 + 关系路径 四路打分取 Top-3
@@ -114,7 +115,7 @@ class Session:
                 from scripts.user.profile import UserProfileStore
                 controls = self._controls()
                 persona = controls.apply_weights(UserProfileStore(self.data_dir).get())
-                guide = compile_guide(persona, budget=schema.DEFAULT_INJECTION_BUDGET["相处指南"])
+                guide = compile_guide(persona, budget=int(caps["相处指南"]))
                 if guide:
                     inj.add("相处指南", guide)
             except Exception:  # noqa: BLE001
@@ -191,6 +192,7 @@ class Session:
                 pass
 
         # 用户信号与记忆采集：丢进离线队列，不让它在对话里占时间
+        # （隐私.采集开关在 runner 的 memory.extract 里把关）
         try:
             from scripts.pipeline.queue import TaskQueue
             queue = TaskQueue(self.data_dir)
@@ -227,12 +229,17 @@ class Session:
                 verdict = trigger.evaluate(now)
                 if verdict.get("should"):
                     text = compose(verdict["kind"], self.slug, self.data_dir)
-                    trigger.mark_sent(verdict["kind"], now)
-                    out["care"] = {"kind": verdict["kind"], "reason": verdict.get("reason", ""),
-                                   "hint": verdict.get("next_hint", ""), "text": text["text"],
-                                   "tokens": text["tokens"]}
+                    if not text.get("text"):
+                        out["care"] = {"should": False,
+                                       "reason": f"无可用话术（kind={verdict['kind']}）"}
+                    else:
+                        trigger.mark_sent(verdict["kind"], now)
+                        out["care"] = {"kind": verdict["kind"], "reason": verdict.get("reason", ""),
+                                       "hint": verdict.get("next_hint", ""), "text": text["text"],
+                                       "tokens": text["tokens"]}
                 else:
-                    out["care"] = {"should": False, "reason": verdict.get("reason", "")}
+                    out["care"] = {"should": False, "reason": verdict.get("reason", ""),
+                                   "next_eligible": trigger.next_eligible(now)}
             except Exception as exc:  # noqa: BLE001
                 out["care"] = {"error": f"{type(exc).__name__}: {exc}"}
 

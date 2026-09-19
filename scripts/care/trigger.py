@@ -19,14 +19,19 @@
 """
 
 import json
-import os
 import re
+import sys
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-DEFAULT_DATA_DIR = "~/.love-companion/data"
-ENV_DATA_DIR = "LOVE_COMPANION_DATA_DIR"
+# 允许 `python scripts/care/trigger.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from scripts.core import settings as core_settings  # noqa: E402
+from scripts.core.storage import read_json, write_json  # noqa: E402
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "开关": True,
@@ -59,8 +64,7 @@ class CareTrigger:
     """主动关怀触发判定"""
 
     def __init__(self, data_dir: Optional[str] = None, config: Optional[Dict[str, Any]] = None):
-        resolved = data_dir or os.environ.get(ENV_DATA_DIR) or DEFAULT_DATA_DIR
-        self.data_dir = Path(os.path.expanduser(str(resolved)))
+        self.data_dir = core_settings.resolve_data_dir(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.state_file = self.data_dir / "care_state.json"
         self.config = dict(DEFAULT_CONFIG)
@@ -69,16 +73,14 @@ class CareTrigger:
 
     # ---------- 状态 ----------
 
+    _DEFAULT_STATE = {"last_care_at": None, "day": None, "count": 0, "history": []}
+
     def _load_state(self) -> Dict[str, Any]:
-        if not self.state_file.exists():
-            return {"last_care_at": None, "day": None, "count": 0, "history": []}
-        with open(self.state_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        return data if isinstance(data, dict) else {"last_care_at": None, "day": None, "count": 0, "history": []}
+        data = read_json(self.state_file, dict(self._DEFAULT_STATE))
+        return data if isinstance(data, dict) else dict(self._DEFAULT_STATE)
 
     def _save_state(self, state: Dict[str, Any]) -> None:
-        with open(self.state_file, "w", encoding="utf-8") as f:
-            json.dump(state, f, ensure_ascii=False, indent=2)
+        write_json(self.state_file, state)
 
     def mark_sent(self, kind: str, now: Optional[datetime] = None) -> Dict[str, Any]:
         """关怀已发出，更新冷却与当日计数"""
@@ -97,11 +99,7 @@ class CareTrigger:
     # ---------- 信号 ----------
 
     def _user_signals(self) -> List[Dict[str, Any]]:
-        f = self.data_dir / "user_signals.json"
-        if not f.exists():
-            return []
-        with open(f, "r", encoding="utf-8") as fh:
-            data = json.load(fh)
+        data = read_json(self.data_dir / "user_signals.json", [])
         return data if isinstance(data, list) else []
 
     def hours_since_contact(self, now: Optional[datetime] = None) -> Optional[float]:

@@ -15,18 +15,21 @@
 """
 
 import json
-import os
 import re
+import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, Iterable, List, Optional, Sequence
+from typing import Any, Dict, List, Optional, Sequence
 
-from scripts.core import schema
-from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens
+# 允许 `python scripts/trends/store.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-DEFAULT_DATA_DIR = "~/.love-companion/data"
-ENV_DATA_DIR = "LOVE_COMPANION_DATA_DIR"
+from scripts.core import settings as core_settings  # noqa: E402
+from scripts.core.storage import read_json, write_json  # noqa: E402
+from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens  # noqa: E402
 
 # 热度信号词：命中说明这句话在说「什么东西火了」
 HEAT_WORDS = ("火了", "爆火", "爆", "热搜", "刷屏", "出圈", "同款", "流行",
@@ -143,23 +146,18 @@ class TrendStore:
     """趋势知识库"""
 
     def __init__(self, data_dir: Optional[str] = None):
-        resolved = data_dir or os.environ.get(ENV_DATA_DIR) or DEFAULT_DATA_DIR
-        self.data_dir = Path(os.path.expanduser(str(resolved)))
+        self.data_dir = core_settings.resolve_data_dir(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.file = self.data_dir / "trends.json"
         self.max_items = 200
 
     def _load(self) -> Dict[str, Any]:
-        if not self.file.exists():
-            return {"items": [], "updated_at": None}
-        with open(self.file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        data = read_json(self.file, {"items": [], "updated_at": None})
         return data if isinstance(data, dict) else {"items": [], "updated_at": None}
 
     def _save(self, data: Dict[str, Any]) -> None:
         data["updated_at"] = _now()
-        with open(self.file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        write_json(self.file, data)
 
     # ---------- 入库 ----------
 
@@ -210,7 +208,7 @@ class TrendStore:
         预算不够就少带几个主题，绝不挤占其它模块。
         """
         limit = int(budget if budget is not None
-                    else schema.DEFAULT_INJECTION_BUDGET["趋势调味料"])
+                    else core_settings.budget(str(self.data_dir), "趋势调味料"))
         if not topics:
             try:
                 from scripts.user.profile import UserProfileStore

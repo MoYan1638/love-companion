@@ -14,16 +14,19 @@
 """
 
 import json
-import os
-from datetime import datetime, timedelta
+import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from scripts.core import schema
-from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens
+# 允许 `python scripts/multimodal/image_plan.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-DEFAULT_DATA_DIR = "~/.love-companion/data"
-ENV_DATA_DIR = "LOVE_COMPANION_DATA_DIR"
+from scripts.core import settings as core_settings  # noqa: E402
+from scripts.core.storage import read_json, write_json  # noqa: E402
+from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens  # noqa: E402
 
 DEFAULT_CONFIG: Dict[str, Any] = {
     "开关": True,
@@ -71,11 +74,6 @@ INTIMACY_FRAME: Dict[str, Dict[str, str]] = {
 def _current_v1_persona(data_dir: str) -> Dict[str, Any]:
     """读当前生效的 v1 人设（没蒸馏过素材的用户也能出图）"""
     try:
-        import sys
-        from pathlib import Path as _Path
-        root = _Path(__file__).resolve().parents[2]
-        if str(root) not in sys.path:
-            sys.path.insert(0, str(root))
         from scripts.manager import LoveCompanionManager
         return LoveCompanionManager(data_dir).get_persona()
     except Exception:  # noqa: BLE001
@@ -131,8 +129,7 @@ class ImagePlanner:
     """主动发图决策"""
 
     def __init__(self, data_dir: Optional[str] = None, config: Optional[Dict[str, Any]] = None):
-        resolved = data_dir or os.environ.get(ENV_DATA_DIR) or DEFAULT_DATA_DIR
-        self.data_dir = Path(os.path.expanduser(str(resolved)))
+        self.data_dir = core_settings.resolve_data_dir(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.file = self.data_dir / "multimodal.json"
         self.config = dict(DEFAULT_CONFIG)
@@ -142,15 +139,11 @@ class ImagePlanner:
     # ---------- 状态 ----------
 
     def _load(self) -> Dict[str, Any]:
-        if not self.file.exists():
-            return {"history": [], "turns_since_last": 99}
-        with open(self.file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        data = read_json(self.file, {"history": [], "turns_since_last": 99})
         return data if isinstance(data, dict) else {"history": [], "turns_since_last": 99}
 
     def _save(self, data: Dict[str, Any]) -> None:
-        with open(self.file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        write_json(self.file, data)
 
     def tick(self, sent: bool) -> None:
         """每轮对话调用：sent=True 表示这轮发了图，计数归零"""

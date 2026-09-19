@@ -22,7 +22,32 @@ love-companion 本来就有自己的人设体系——`persona.json` 的
 体验项，蒸馏素材无权改动。
 """
 
+import sys
+from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# 允许 `python scripts/persona/adapt.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+
+def _sentence_shape(voice: Dict[str, Any]) -> str:
+    """句式描述的唯一出处：优先用提取出的句式，没有就按平均句长推导。
+
+    只进 v1 对话风格.语气——语言习惯不再重复写一遍（排查缺陷 3）。
+    """
+    shape = (voice.get("句式") or "").strip()
+    if shape:
+        return shape
+    avg = voice.get("平均句长")
+    if isinstance(avg, (int, float)) and avg:
+        if avg <= 12:
+            return "短句连发，一条消息一句话"
+        if avg >= 40:
+            return "会把话说完整，偏长句"
+        return "长短句交替"
+    return ""
 
 # 蒸馏无权改动的字段（用户显式设置）
 IMMUTABLE_FIELDS = ("亲密尺度", "内容边界", "对用户的称呼", "姓名", "性别", "年龄")
@@ -52,7 +77,7 @@ INTIMACY_TO_INITIATIVE: Dict[str, str] = {"高": "高", "中": "中", "低": "�
 def _modal_to_tone(voice: Dict[str, Any]) -> str:
     """声线的语气词/句式 → v1 对话风格.语气"""
     tails = voice.get("语气词") or []
-    shape = voice.get("句式") or ""
+    shape = _sentence_shape(voice)
     if tails and shape:
         return f"句尾常带{'、'.join(tails[:3])}；{shape}"
     if tails:
@@ -61,16 +86,8 @@ def _modal_to_tone(voice: Dict[str, Any]) -> str:
 
 
 def _emoji_to_habit(voice: Dict[str, Any]) -> str:
-    """标点/emoji/句长 → v1 对话风格.语言习惯"""
+    """标点/emoji → v1 对话风格.语言习惯（句式归「语气」，这里不重复）"""
     parts: List[str] = []
-    avg = voice.get("平均句长")
-    if isinstance(avg, (int, float)) and avg:
-        if avg <= 12:
-            parts.append("短句连发，一条消息一句话")
-        elif avg >= 40:
-            parts.append("会把话说完整，偏长句")
-        else:
-            parts.append("长短句交替")
     freq = voice.get("emoji频率") or 0
     if isinstance(freq, (int, float)):
         if freq >= 0.5:
@@ -199,7 +216,7 @@ def is_configured(persona: Dict[str, Any]) -> bool:
     return bool(persona.get("背景故事") or persona.get("内容边界"))
 
 
-def lover_card(persona: Dict[str, Any], budget: int = 100) -> str:
+def lover_card(persona: Optional[Dict[str, Any]], budget: int = 100) -> str:
     """把 v1 人设编译成在线注入的「恋人行为卡」
 
     这是 love-companion 自己的形态，**不是** crush-skills 的 5 层人格模型。
@@ -210,6 +227,10 @@ def lover_card(persona: Dict[str, Any], budget: int = 100) -> str:
         budget: Token 上限，默认 100（人格指令预算）
     """
     from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens
+
+    persona = persona or {}
+    if not isinstance(persona, dict):
+        return ""
 
     must: List[str] = []      # 安全约束，截断时必须保住
     nice: List[str] = []      # 风格描述，可以砍
@@ -295,6 +316,5 @@ def from_v1_file(data_dir: Optional[str] = None, budget: int = 100) -> str:
 
 
 if __name__ == "__main__":
-    import json
     card = from_v1_file()
     print(card or "（v1 persona.json 为空，先 /恋人配置 或 /恋人套用 N）")

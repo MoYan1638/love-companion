@@ -12,15 +12,18 @@
 """
 
 import json
-import os
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from scripts.core import schema
+# 允许 `python scripts/panel/controls.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-DEFAULT_DATA_DIR = "~/.love-companion/data"
-ENV_DATA_DIR = "LOVE_COMPANION_DATA_DIR"
+from scripts.core import settings as core_settings  # noqa: E402
+from scripts.core.storage import write_json  # noqa: E402
 
 # 可开关的模块（与 schema.settings_template()["模块开关"] 对应）
 MODULES = ("记忆系统", "人格克隆", "用户理解", "语气后处理",
@@ -37,28 +40,21 @@ class Controls:
     """用户控制面"""
 
     def __init__(self, data_dir: Optional[str] = None):
-        resolved = data_dir or os.environ.get(ENV_DATA_DIR) or DEFAULT_DATA_DIR
-        self.data_dir = Path(os.path.expanduser(str(resolved)))
+        self.data_dir = core_settings.resolve_data_dir(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.file = self.data_dir / "settings.json"
 
     # ---------- IO ----------
 
     def _load(self) -> Dict[str, Any]:
-        if self.file.exists():
-            with open(self.file, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            if isinstance(data, dict):
-                base = schema.settings_template()
-                base.update(data)
-                base.setdefault("特征权重", {})
-                return base
-        return schema.settings_template()
+        # 深合并：用户 settings.json 只覆盖它写明的叶子，缺省回退模板
+        base = core_settings.load(str(self.data_dir))
+        base.setdefault("特征权重", {})
+        return base
 
     def _save(self, settings: Dict[str, Any]) -> None:
         settings["updated_at"] = _now()
-        with open(self.file, "w", encoding="utf-8") as f:
-            json.dump(settings, f, ensure_ascii=False, indent=2)
+        write_json(self.file, settings)
 
     # ---------- 1. 模块开关 ----------
 
@@ -171,11 +167,6 @@ class Controls:
         # 当前生效的 persona.json 通常就是这段关系的人设；
         # 人格库清了而 persona.json 留着，等于「忘了人却还顶着她的名字说话」
         try:
-            from pathlib import Path as _P
-            import sys as _sys
-            root = _P(__file__).resolve().parents[2]
-            if str(root) not in _sys.path:
-                _sys.path.insert(0, str(root))
             from scripts.manager import LoveCompanionManager
             manager = LoveCompanionManager(str(self.data_dir))
             pf = self.data_dir / "persona.json"
@@ -193,10 +184,9 @@ class Controls:
     def status(self) -> Dict[str, Any]:
         """一句话概览，供「说明当前设置」类问题使用"""
         s = self._load()
-        on = [m for m, v in (s.get("模块开关") or {}).items() if v]
         return {
             "schema_version": s.get("schema_version"),
-            "开启模块": on,
+            "开启模块": [m for m, v in self.switches().items() if v],
             "语气强度": s.get("语气强度"),
             "人工修正的特征": list((s.get("特征权重") or {}).keys()),
             "注入预算合计": (s.get("注入预算") or {}).get("合计上限"),

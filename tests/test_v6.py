@@ -23,7 +23,6 @@ if str(ROOT) not in sys.path:
 
 from scripts.core import schema  # noqa: E402
 from scripts.pipeline import audit  # noqa: E402
-from scripts.pipeline.injector import estimate_tokens  # noqa: E402
 from scripts.pipeline.orchestrator import Session, run_round  # noqa: E402
 
 

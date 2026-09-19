@@ -10,10 +10,17 @@
 
 import math
 import re
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional
 
-from scripts.pipeline.injector import estimate_tokens
+# 允许 `python scripts/memory/retrieve.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from scripts.pipeline.injector import estimate_tokens  # noqa: E402
 
 _CJK = re.compile(r"[\u4e00-\u9fff]")
 _PUNCT = re.compile(r"[，。！？、；：,.!?;:\s]+")

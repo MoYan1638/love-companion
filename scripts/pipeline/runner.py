@@ -84,8 +84,13 @@ def run_idle(data_dir: Optional[str] = None, max_tasks: int = 8) -> Dict[str, An
 @register("memory.extract")
 def _task_memory_extract(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
     """从一段对话文本中无感采集记忆（离线，不占对话 Token）"""
+    from scripts.core import settings as core_settings
     from scripts.memory.store import MemoryStore
     from scripts.memory.extract import extract_memories
+
+    # 隐私.采集开关：用户关了就一条不采（数据主权）
+    if not core_settings.collection_enabled(ctx["data_dir"]):
+        return {"added": 0, "reason": "采集开关已关闭"}
 
     text = payload.get("text", "")
     if not text:
@@ -194,6 +199,9 @@ def _task_care_evaluate(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[st
 
     slug = payload.get("slug", "")
     out = compose(verdict["kind"], slug, ctx["data_dir"], detail=payload.get("detail", ""))
+    if not out.get("text"):
+        # 未知类型等原因产不出话术：不发送、不消耗冷却额度
+        return {"should": False, "reason": f"无可用话术（kind={verdict['kind']}）"}
     t.mark_sent(verdict["kind"], now)
     return {"should": True, "kind": verdict["kind"], "reason": verdict.get("reason", ""),
             "hint": verdict.get("next_hint", ""), "text": out["text"], "tokens": out["tokens"]}

@@ -12,14 +12,19 @@
 """
 
 import json
-import os
+import sys
 import uuid
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-DEFAULT_DATA_DIR = "~/.love-companion/data"
-ENV_DATA_DIR = "LOVE_COMPANION_DATA_DIR"
+# 允许 `python scripts/pipeline/queue.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from scripts.core import settings as core_settings  # noqa: E402
+from scripts.core.storage import read_json, write_json  # noqa: E402
 
 
 def _now() -> str:
@@ -30,8 +35,7 @@ class TaskQueue:
     """本地文件任务队列"""
 
     def __init__(self, data_dir: Optional[str] = None):
-        resolved = data_dir or os.environ.get(ENV_DATA_DIR) or DEFAULT_DATA_DIR
-        self.data_dir = Path(os.path.expanduser(str(resolved)))
+        self.data_dir = core_settings.resolve_data_dir(data_dir)
         self.queue_dir = self.data_dir / "pipeline" / "queue"
         self.queue_dir.mkdir(parents=True, exist_ok=True)
 
@@ -41,21 +45,20 @@ class TaskQueue:
         return self.queue_dir / f"{task_id}.json"
 
     def _load(self, task_id: str) -> Optional[Dict[str, Any]]:
-        p = self._path(task_id)
-        if not p.exists():
-            return None
-        with open(p, "r", encoding="utf-8") as f:
-            return json.load(f)
+        data = read_json(self._path(task_id), None)
+        return data if isinstance(data, dict) else None
 
     def _save(self, task: Dict[str, Any]) -> None:
-        with open(self._path(task["id"]), "w", encoding="utf-8") as f:
-            json.dump(task, f, ensure_ascii=False, indent=2)
+        write_json(self._path(task["id"]), task)
 
     def all(self) -> List[Dict[str, Any]]:
         tasks = []
         for p in sorted(self.queue_dir.glob("*.json")):
-            with open(p, "r", encoding="utf-8") as f:
-                tasks.append(json.load(f))
+            if p.name.startswith("."):
+                continue  # 原子写的临时残件
+            data = read_json(p, None)
+            if isinstance(data, dict):
+                tasks.append(data)
         return tasks
 
     # ---------- 生命周期 ----------

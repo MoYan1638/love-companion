@@ -7,9 +7,16 @@
 相处指南编译产物必须 < 200 Token（方案 Token 预算表硬约束）。
 """
 
+import sys
+from pathlib import Path
 from typing import Any, Dict, List
 
-from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens
+# 允许 `python scripts/user/guide.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens  # noqa: E402
 
 # 依恋类型判定规则：(类型, 命中关键词/信号权重)
 ANXIETY_WORDS = ("在吗", "怎么不回", "是不是", "你还在吗", "不要不理", "为什么不", "你不在乎", "怕你")

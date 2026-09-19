@@ -11,7 +11,6 @@
 - multimodal   由 v1 关心方式 / 亲密尺度 / 内容边界决定，不是通用审美
 """
 
-import json
 import os
 import sys
 import tempfile

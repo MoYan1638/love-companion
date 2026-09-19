@@ -16,10 +16,17 @@
 """
 
 import re
+import sys
 from collections import Counter
+from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Sequence
 
-from scripts.core import schema
+# 允许 `python scripts/persona/extract.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from scripts.core import schema  # noqa: E402
 
 # ---------------- 词表 ----------------
 

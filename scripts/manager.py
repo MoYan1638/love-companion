@@ -110,10 +110,10 @@ class LoveCompanionManager:
     # ==================== 配置管理 ====================
 
     def get_persona(self) -> Dict[str, Any]:
-        """获取当前人设配置"""
+        """获取当前人设配置（utf-8-sig：兼容 Windows 记事本/WPS 写入的 BOM 文件）"""
         config_file = self.storage_path / "persona.json"
         if config_file.exists():
-            with open(config_file, "r", encoding="utf-8") as f:
+            with open(config_file, "r", encoding="utf-8-sig") as f:
                 return json.load(f)
         return self.DEFAULT_PERSONA.copy()
 
@@ -310,11 +310,11 @@ class LoveCompanionManager:
     # ==================== 记忆管理 ====================
 
     def get_memories(self) -> List[Dict[str, Any]]:
-        """获取所有长时记忆"""
+        """获取所有长时记忆（utf-8-sig：兼容带 BOM 的文件）"""
         memory_file = self.storage_path / "memory.json"
 
         if memory_file.exists():
-            with open(memory_file, "r", encoding="utf-8") as f:
+            with open(memory_file, "r", encoding="utf-8-sig") as f:
                 return json.load(f)
         return []
 
@@ -368,6 +368,8 @@ class LoveCompanionManager:
     def import_persona(self, json_str: str) -> Dict[str, Any]:
         """从JSON字符串导入人设配置"""
         persona = json.loads(json_str)
+        if not isinstance(persona, dict):
+            raise ValueError(f"人设必须是 JSON 对象，收到 {type(persona).__name__}")
         return self.set_persona(persona)
 
     # ==================== 工具方法 ====================
@@ -413,6 +415,9 @@ Usage: python manager.py <command> [args]
 Commands:
   status                  Show current status
   get                     Print current persona as JSON
+  set <path> <value>      Set one persona field (path 用点分隔，如 性格.核心特质)
+  update <json>           Merge a partial persona JSON into current config
+  import <json>           Replace persona with a full JSON document
   reset                   Reset persona to default
   presets                 List preset personas (source: references/personas.md)
   apply <n>               Apply preset #n as the current persona
@@ -448,6 +453,34 @@ if __name__ == "__main__":
 
     elif command == "get":
         print(manager.export_persona())
+
+    elif command == "set":
+        path = require("field path")
+        raw = require("value")
+        try:
+            value = json.loads(raw)
+        except json.JSONDecodeError:
+            value = raw
+        manager.set_persona_field(path, value)
+        print(f"Set {path}.")
+
+    elif command == "update":
+        raw = require("partial persona json")
+        try:
+            manager.update_persona(json.loads(raw))
+        except json.JSONDecodeError as exc:
+            print(f"Invalid JSON: {exc}")
+            sys.exit(1)
+        print("Persona updated.")
+
+    elif command == "import":
+        raw = require("full persona json")
+        try:
+            manager.import_persona(raw)
+        except (json.JSONDecodeError, ValueError) as exc:
+            print(f"Invalid persona JSON: {exc}")
+            sys.exit(1)
+        print("Persona imported.")
 
     elif command == "reset":
         manager.reset_persona()

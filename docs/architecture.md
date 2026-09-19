@@ -145,8 +145,16 @@ love-companion/
 - **v2 是 v1 的超集**：v1 条目只有 `id/content/created_at`，v2 完整保留并追加元数据 →
   v1 的 `manager.py` 可直接读取 v2 数据，升级无损、可回退（测试里有断言覆盖）
 - **User Persona**：沟通风格 / 大五 / 依恋类型 / 情绪模式 / 互动偏好（均带置信度）
-- **克隆人格**：声线 / 思维 / 性格 三层 + 关系面（M5 填充）+ 版本
-- **衰减参数**：重要性半衰期 30 天、每次召回 +0.05、下限 0.05
+- **克隆人格**：声线 / 思维 / 性格 三层 + 版本（「关系面」由 mirror.py 的阶段参数表达，不落进人格文件）
+- **衰减参数**：重要性半衰期 30 天、每次召回 +0.05、下限 0.05（默认值；用户在 settings.json 里可调，代码真实读取）
+- **注入预算**：同上——settings.json 里的「注入预算」深合并进默认表，orchestrator 每轮按它分配
+- **采集开关**：settings.json「隐私.采集开关」关闭后，记忆与信号一条不采
+
+### 数据文件可靠性（排查整改后）
+
+- 所有 JSON 读写统一走 `scripts/core/storage.py`：`read_json` 坏文件自动备份为 `.bad-<时间戳>` 并返回默认值；`write_json` 临时文件 + `os.replace` 原子替换
+- settings 统一走 `scripts/core/settings.py`：深合并（用户只覆盖写明的叶子），坏文件降级为默认模板
+- 数据目录解析统一走 `core/settings.resolve_data_dir`（入参 > 环境变量 > 默认路径）
 
 ---
 

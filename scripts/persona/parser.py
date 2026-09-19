@@ -18,10 +18,16 @@ import hashlib
 import io
 import json
 import re
+import sys
 from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from scripts.core import privacy
+# 允许 `python scripts/persona/parser.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
+
+from scripts.core import privacy  # noqa: E402
 
 # 时间戳：2024-05-20 14:23 / 2024/5/20 14:23:01 / 2024年5月20日 14:23
 _TS = r"\d{4}\s*[-/年]\s*\d{1,2}\s*[-/月]\s*\d{1,2}\s*日?[\sT]*\d{1,2}:\d{2}(?::\d{2})?"

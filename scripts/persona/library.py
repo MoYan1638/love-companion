@@ -20,17 +20,21 @@
 """
 
 import json
-import os
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
 
-from scripts.core import schema
-from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens
+# 允许 `python scripts/persona/library.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-DEFAULT_DATA_DIR = "~/.love-companion/data"
-ENV_DATA_DIR = "LOVE_COMPANION_DATA_DIR"
+from scripts.core import schema  # noqa: E402
+from scripts.core import settings as core_settings  # noqa: E402
+from scripts.core.storage import read_json, write_json  # noqa: E402
+from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens  # noqa: E402
 
 _UNSAFE = re.compile(r"[^\w\u4e00-\u9fff\-]")
 
@@ -58,8 +62,7 @@ class PersonaLibrary:
     """伴侣人格库"""
 
     def __init__(self, data_dir: Optional[str] = None):
-        resolved = data_dir or os.environ.get(ENV_DATA_DIR) or DEFAULT_DATA_DIR
-        self.data_dir = Path(os.path.expanduser(str(resolved)))
+        self.data_dir = core_settings.resolve_data_dir(data_dir)
         self.root = self.data_dir / "personas"
         self.root.mkdir(parents=True, exist_ok=True)
         self.versions_root = self.root / "_versions"
@@ -68,15 +71,11 @@ class PersonaLibrary:
     # ---------- 索引 IO ----------
 
     def _load_index(self) -> Dict[str, Any]:
-        if not self.index_file.exists():
-            return {}
-        with open(self.index_file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        data = read_json(self.index_file, {})
         return data if isinstance(data, dict) else {}
 
     def _save_index(self, index: Dict[str, Any]) -> None:
-        with open(self.index_file, "w", encoding="utf-8") as f:
-            json.dump(index, f, ensure_ascii=False, indent=2)
+        write_json(self.index_file, index)
 
     def _path(self, slug: str) -> Path:
         return self.root / f"{slug}.json"
@@ -91,11 +90,8 @@ class PersonaLibrary:
         return self._path(slug).exists()
 
     def get(self, slug: str) -> Optional[Dict[str, Any]]:
-        p = self._path(slug)
-        if not p.exists():
-            return None
-        with open(p, "r", encoding="utf-8") as f:
-            return json.load(f)
+        data = read_json(self._path(slug), None)
+        return data if isinstance(data, dict) else None
 
     def create(self, persona: Dict[str, Any], slug: Optional[str] = None) -> Dict[str, Any]:
         """新建一条人格（若同名已存在则走 merge，不覆盖）"""
@@ -116,8 +112,7 @@ class PersonaLibrary:
         if snapshot:
             self._snapshot(slug, persona)
         persona["updated_at"] = _now()
-        with open(self._path(slug), "w", encoding="utf-8") as f:
-            json.dump(persona, f, ensure_ascii=False, indent=2)
+        write_json(self._path(slug), persona)
         index = self._load_index()
         index[slug] = {
             "姓名": persona.get("姓名", ""),
@@ -243,14 +238,15 @@ class PersonaLibrary:
         """
         p = self._path(slug)
         if p.exists():
-            archived = json.loads(p.read_text(encoding="utf-8"))
+            archived = read_json(p, persona)
+            if not isinstance(archived, dict):
+                archived = persona
         else:
             archived = persona
         vdir = self.versions_root / slug
         vdir.mkdir(parents=True, exist_ok=True)
         version = int(archived.get("版本", 1))
-        with open(vdir / f"v{version}.json", "w", encoding="utf-8") as f:
-            json.dump(archived, f, ensure_ascii=False, indent=2)
+        write_json(vdir / f"v{version}.json", archived)
 
     def versions(self, slug: str) -> List[int]:
         vdir = self.versions_root / slug
@@ -269,8 +265,9 @@ class PersonaLibrary:
         vfile = self.versions_root / slug / f"v{version}.json"
         if not vfile.exists():
             return None
-        with open(vfile, "r", encoding="utf-8") as f:
-            old = json.load(f)
+        old = read_json(vfile, None)
+        if not isinstance(old, dict):
+            return None
         old["版本"] = int(old.get("版本", version)) + 1
         self._write(slug, old, snapshot=True)
         return old
@@ -287,7 +284,7 @@ class PersonaLibrary:
         from scripts.persona.adapt import lover_card
 
         limit = int(budget if budget is not None
-                    else schema.DEFAULT_INJECTION_BUDGET["人格指令"])
+                    else core_settings.budget(str(self.data_dir), "人格指令"))
         persona = self.get(slug)
         if persona is None:
             return ""
@@ -319,12 +316,6 @@ class PersonaLibrary:
             overwrite: False（默认）只填空——用户手写过的值不动，
                        亲密尺度/内容边界/对用户的称呼 永远不动。
         """
-        import sys
-        from pathlib import Path
-
-        root = Path(__file__).resolve().parents[2]
-        if str(root) not in sys.path:
-            sys.path.insert(0, str(root))
         from scripts.manager import LoveCompanionManager
 
         extracted = self.get(slug)
@@ -339,12 +330,6 @@ class PersonaLibrary:
     @staticmethod
     def from_preset(preset_id: int) -> Dict[str, Any]:
         """取一套 v1 预设作为蒸馏基底（预设 → 素材校准，而不是二选一）"""
-        import sys
-        from pathlib import Path
-
-        root = Path(__file__).resolve().parents[2]
-        if str(root) not in sys.path:
-            sys.path.insert(0, str(root))
         from scripts.manager import LoveCompanionManager
         preset = LoveCompanionManager().load_preset(preset_id)
         return preset or {}

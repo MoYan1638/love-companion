@@ -578,7 +578,8 @@ class TestCareTemplates(unittest.TestCase):
         self.assertEqual(a, b)
 
     def test_unknown_kind_safe(self):
-        self.assertTrue(care_templates.render("不存在的类型", nickname="小美"))
+        # 未知类型返回空串（宁肯不发，也不发「在吗。」这种无意义话术）
+        self.assertEqual(care_templates.render("不存在的类型", nickname="小美"), "")
 
 
 # ==================== pipeline 串联 ====================

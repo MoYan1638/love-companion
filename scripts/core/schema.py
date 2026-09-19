@@ -42,25 +42,29 @@ INJECTION_PRIORITY = ("相处指南", "记忆片段", "人格指令", "关怀话
 
 
 def allocate_budget(total: Optional[int] = None,
-                    keys: Optional[List[str]] = None) -> Dict[str, int]:
+                    keys: Optional[List[str]] = None,
+                    caps: Optional[Dict[str, int]] = None) -> Dict[str, int]:
     """按优先级分配单轮注入预算，返回各模块可用额度
 
     Args:
-        total: 本轮总预算，默认取 DEFAULT_INJECTION_BUDGET["合计上限"]
+        total: 本轮总预算，默认取 caps["合计上限"]
         keys: 本轮**实际有内容**的模块（按优先级给出）。
               不传则按全部模块分配——那样低优先模块会被压到 0；
               传入时只为这些模块分配，空模块不占额度，避免
               「没内容的高优先模块白占预算，把有内容的低优先模块挤掉」。
+        caps: 各模块上限表，默认 DEFAULT_INJECTION_BUDGET；
+              core/settings.py 会传入用户在 settings.json 里调过的表。
 
     Returns:
         {"相处指南": 200, "记忆片段": 150, ..., "合计上限": total}
         总和恒 ≤ total（低优先模块会被压缩，甚至为 0）
     """
-    total = int(total if total is not None else DEFAULT_INJECTION_BUDGET["合计上限"])
+    caps = caps or DEFAULT_INJECTION_BUDGET
+    total = int(total if total is not None else caps["合计上限"])
     remaining = total
     result: Dict[str, int] = {}
     for key in (keys if keys is not None else INJECTION_PRIORITY):
-        size = min(int(DEFAULT_INJECTION_BUDGET.get(key, 0)), remaining)
+        size = min(int(caps.get(key, 0)), remaining)
         result[key] = max(0, size)
         remaining -= result[key]
     result["合计上限"] = total
@@ -202,7 +206,6 @@ def cloned_persona_template(name: str = "") -> Dict[str, Any]:
         "声线": {"用词习惯": [], "口头禅": [], "句式": ""},
         "思维": {"决策逻辑": "", "关注顺序": [], "价值观": []},
         "性格": {"情绪反应模式": "", "亲密度基线": 0.5, "冲突应对": ""},
-        "关系面": {},          # 面对不同用户的性格面（M5 双向人格镜像填充）
         "来源素材": [],         # 素材指纹，不含原始内容
         "版本": 1,
         "created_at": _now(),
@@ -227,7 +230,8 @@ def settings_template() -> Dict[str, Any]:
         "特征权重": {},
         "注入预算": dict(DEFAULT_INJECTION_BUDGET),
         "衰减参数": dict(DEFAULT_DECAY),
-        "隐私": {"采集开关": True, "本地存储": True, "允许溯源片段": True},
+        # 采集开关：关闭后不再采集记忆与用户信号（数据主权）
+        "隐私": {"采集开关": True},
         "updated_at": _now(),
     }
 

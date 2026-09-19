@@ -366,7 +366,7 @@ export LOVE_COMPANION_DATA_DIR=/your/custom/path
   - `python scripts/pipeline/audit.py` Token 预算审计与压测
   - `python scripts/pipeline/orchestrator.py --status` 查看当前状态
   - `python scripts/migrate/migrate_v1.py --dry-run` 预演 v1→v2 迁移
-- **测试**：`python -m unittest discover -s tests`（224 项回归）
+- **测试**：`python -m unittest discover -s tests`（296 项回归）
 
 ---
 

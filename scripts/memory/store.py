@@ -16,15 +16,19 @@
 """
 
 import json
-import os
-from datetime import datetime, timedelta
+import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-from scripts.core import schema
+# 允许 `python scripts/memory/store.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-DEFAULT_DATA_DIR = "~/.love-companion/data"
-ENV_DATA_DIR = "LOVE_COMPANION_DATA_DIR"
+from scripts.core import schema  # noqa: E402
+from scripts.core import settings as core_settings  # noqa: E402
+from scripts.core.storage import read_json, write_json  # noqa: E402
 
 
 def _now() -> str:
@@ -35,23 +39,18 @@ class MemoryStore:
     """六类记忆的本地存储"""
 
     def __init__(self, data_dir: Optional[str] = None):
-        resolved = data_dir or os.environ.get(ENV_DATA_DIR) or DEFAULT_DATA_DIR
-        self.data_dir = Path(os.path.expanduser(str(resolved)))
+        self.data_dir = core_settings.resolve_data_dir(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.file = self.data_dir / "memory.json"
 
     # ---------- IO ----------
 
     def _load(self) -> List[Dict[str, Any]]:
-        if not self.file.exists():
-            return []
-        with open(self.file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        data = read_json(self.file, [])
         return data if isinstance(data, list) else []
 
     def _save(self, memories: List[Dict[str, Any]]) -> None:
-        with open(self.file, "w", encoding="utf-8") as f:
-            json.dump(memories, f, ensure_ascii=False, indent=2)
+        write_json(self.file, memories)
 
     def all(self) -> List[Dict[str, Any]]:
         """返回已规范化为 v2 结构的全部记忆"""
@@ -64,9 +63,12 @@ class MemoryStore:
             importance: float = 0.5, valence: float = 0.0,
             conversation_id: str = "") -> Dict[str, Any]:
         """新增一条记忆（自动去重：同 type 同 content 只保留一条并刷新时间）"""
+        content = str(content or "").strip()
+        if not content:
+            raise ValueError("记忆 content 不能为空")
         memories = self.all()
         for m in memories:
-            if m.get("type") == memory_type and m.get("content") == content.strip():
+            if m.get("type") == memory_type and m.get("content") == content:
                 m["updated_at"] = _now()
                 m["importance"] = max(float(m.get("importance", 0.5)), importance)
                 for i, old in enumerate(memories, 1):
@@ -75,7 +77,7 @@ class MemoryStore:
                 return m
 
         entry = schema.memory_entry(
-            content=content.strip(), memory_type=memory_type, source=source,
+            content=content, memory_type=memory_type, source=source,
             importance=importance, valence=valence, conversation_id=conversation_id,
         )
         entry["id"] = len(memories) + 1
@@ -150,8 +152,9 @@ class MemoryStore:
         if not memory_ids:
             return
         memories = self.all()
-        boost = schema.DEFAULT_DECAY["recall_boost"]
-        ceiling = schema.DEFAULT_DECAY["max_importance"]
+        cfg = core_settings.decay_params(str(self.data_dir))
+        boost = cfg["recall_boost"]
+        ceiling = cfg["max_importance"]
         for m in memories:
             if m.get("id") in memory_ids:
                 m["recall_count"] = int(m.get("recall_count", 0)) + 1
@@ -162,8 +165,9 @@ class MemoryStore:
     def decay(self, now: Optional[datetime] = None) -> int:
         """长期记忆重要性按半衰期衰减，返回被衰减的条数"""
         now = now or datetime.now()
-        half_life = schema.DEFAULT_DECAY["half_life_days"]
-        floor = schema.DEFAULT_DECAY["min_importance"]
+        cfg = core_settings.decay_params(str(self.data_dir))
+        half_life = cfg["half_life_days"]
+        floor = cfg["min_importance"]
         memories = self.all()
         changed = 0
         for m in memories:

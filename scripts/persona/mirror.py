@@ -15,16 +15,20 @@
 """
 
 import json
-import os
 import re
-from datetime import datetime, timedelta
+import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
-from scripts.pipeline.injector import estimate_tokens
+# 允许 `python scripts/persona/mirror.py` 直接跑（此时 sys.path[0] 是脚本所在目录）
+_ROOT = Path(__file__).resolve().parents[2]
+if str(_ROOT) not in sys.path:
+    sys.path.insert(0, str(_ROOT))
 
-DEFAULT_DATA_DIR = "~/.love-companion/data"
-ENV_DATA_DIR = "LOVE_COMPANION_DATA_DIR"
+from scripts.core import settings as core_settings  # noqa: E402
+from scripts.core.storage import read_json, write_json  # noqa: E402
+from scripts.pipeline.injector import estimate_tokens  # noqa: E402
 
 # 事件类型 → 亲密度增量（可正可负）
 EVENT_DELTA = {
@@ -65,27 +69,18 @@ class MirrorModel:
     """双向人格镜像"""
 
     def __init__(self, data_dir: Optional[str] = None):
-        resolved = data_dir or os.environ.get(ENV_DATA_DIR) or DEFAULT_DATA_DIR
-        self.data_dir = Path(os.path.expanduser(str(resolved)))
+        self.data_dir = core_settings.resolve_data_dir(data_dir)
         self.data_dir.mkdir(parents=True, exist_ok=True)
         self.file = self.data_dir / "relations.json"
 
     # ---------- IO ----------
 
     def _load(self) -> Dict[str, Any]:
-        if not self.file.exists():
-            return {}
-        with open(self.file, "r", encoding="utf-8") as f:
-            data = json.load(f)
+        data = read_json(self.file, {})
         return data if isinstance(data, dict) else {}
 
     def _save(self, data: Dict[str, Any]) -> None:
-        with open(self.file, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-
-    def _rel(self, slug: str) -> Dict[str, Any]:
-        data = self._load()
-        return data.setdefault(slug, {"events": [], "feedback": [], "stage": "", "intimacy": None})
+        write_json(self.file, data)
 
     # ---------- 1. 关系演化建模 ----------
 
