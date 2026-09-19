@@ -1,0 +1,358 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+伴侣人格库（M3a）——存储、增量合并、纠偏、版本回滚、在线编译
+
+参考 yourself-skill 的三件套进化机制：
+- 追加记忆 → 增量 merge 进对应部分
+- 对话纠正 → 写入 Correction 层，**立即生效**
+- 版本管理 → 每次更新自动存档，支持回滚
+
+数据位置：~/.love-companion/data/personas/
+    index.json              索引（slug → 基本信息）
+    {slug}.json             人格本体
+    _versions/{slug}/v{n}.json   历史版本，用于回滚
+
+红线：
+- 只依赖标准库
+- 在线只注入 compile_summary 产出的压缩摘要，人格全量不进上下文
+- 每条人格可追溯到素材指纹（来源素材），禁止凭空生成
+"""
+
+import json
+import os
+import re
+from datetime import datetime
+from pathlib import Path
+from typing import Any, Dict, List, Optional, Sequence
+
+from scripts.core import schema
+from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens
+
+DEFAULT_DATA_DIR = "~/.love-companion/data"
+ENV_DATA_DIR = "LOVE_COMPANION_DATA_DIR"
+
+_UNSAFE = re.compile(r"[^\w\u4e00-\u9fff\-]")
+
+
+def _now() -> str:
+    return datetime.now().isoformat(timespec="seconds")
+
+
+def slugify(name: str) -> str:
+    """中文名也能安全做文件名；空名回退到时间戳"""
+    s = _UNSAFE.sub("-", (name or "").strip()).strip("-")
+    if not s:
+        s = "persona-" + datetime.now().strftime("%Y%m%d%H%M%S")
+    return s[:40]
+
+
+class PersonaLibrary:
+    """伴侣人格库"""
+
+    def __init__(self, data_dir: Optional[str] = None):
+        resolved = data_dir or os.environ.get(ENV_DATA_DIR) or DEFAULT_DATA_DIR
+        self.data_dir = Path(os.path.expanduser(str(resolved)))
+        self.root = self.data_dir / "personas"
+        self.root.mkdir(parents=True, exist_ok=True)
+        self.versions_root = self.root / "_versions"
+        self.index_file = self.root / "index.json"
+
+    # ---------- 索引 IO ----------
+
+    def _load_index(self) -> Dict[str, Any]:
+        if not self.index_file.exists():
+            return {}
+        with open(self.index_file, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        return data if isinstance(data, dict) else {}
+
+    def _save_index(self, index: Dict[str, Any]) -> None:
+        with open(self.index_file, "w", encoding="utf-8") as f:
+            json.dump(index, f, ensure_ascii=False, indent=2)
+
+    def _path(self, slug: str) -> Path:
+        return self.root / f"{slug}.json"
+
+    # ---------- CRUD ----------
+
+    def list(self) -> List[Dict[str, Any]]:
+        index = self._load_index()
+        return [dict(v, slug=k) for k, v in index.items()]
+
+    def exists(self, slug: str) -> bool:
+        return self._path(slug).exists()
+
+    def get(self, slug: str) -> Optional[Dict[str, Any]]:
+        p = self._path(slug)
+        if not p.exists():
+            return None
+        with open(p, "r", encoding="utf-8") as f:
+            return json.load(f)
+
+    def create(self, persona: Dict[str, Any], slug: Optional[str] = None) -> Dict[str, Any]:
+        """新建一条人格（若同名已存在则走 merge，不覆盖）"""
+        base = slug or slugify(persona.get("昵称") or persona.get("姓名") or "")
+        if self.exists(base):
+            return self.merge(base, persona)
+        persona = dict(persona)
+        persona.setdefault("schema_version", schema.SCHEMA_VERSION)
+        persona.setdefault("纠偏", [])
+        persona["版本"] = 1
+        persona["created_at"] = _now()
+        persona["updated_at"] = _now()
+        self._write(base, persona, snapshot=True)
+        return persona
+
+    def _write(self, slug: str, persona: Dict[str, Any], snapshot: bool = False) -> None:
+        if snapshot:
+            self._snapshot(slug, persona)
+        persona["updated_at"] = _now()
+        with open(self._path(slug), "w", encoding="utf-8") as f:
+            json.dump(persona, f, ensure_ascii=False, indent=2)
+        index = self._load_index()
+        index[slug] = {
+            "姓名": persona.get("姓名", ""),
+            "昵称": persona.get("昵称", ""),
+            "版本": persona.get("版本", 1),
+            "语料量": persona.get("语料量", 0),
+            "updated_at": persona["updated_at"],
+        }
+        self._save_index(index)
+
+    def delete(self, slug: str) -> bool:
+        """删除人格本体（历史版本保留，防止误删后可找回）"""
+        p = self._path(slug)
+        if not p.exists():
+            return False
+        p.unlink()
+        index = self._load_index()
+        index.pop(slug, None)
+        self._save_index(index)
+        return True
+
+    # ---------- 增量合并（merger） ----------
+
+    def merge(self, slug: str, incoming: Dict[str, Any]) -> Dict[str, Any]:
+        """把新素材的提取结果增量合并进已有人格
+
+        合并策略：
+        - 列表：并集去重，新证据排前面，截断到长度上限
+        - 数值：按语料量加权平均（新素材量越大权重越高）
+        - 枚举字符串：新值非「未知」才覆盖，避免稀疏语料把结论洗掉
+        - 素材指纹：累积去重，保证可溯源
+        """
+        current = self.get(slug)
+        if current is None:
+            return self.create(incoming, slug)
+
+        old_n = max(1, int(current.get("语料量", 1)))
+        new_n = max(1, int(incoming.get("语料量", 1)))
+        w_old, w_new = old_n / (old_n + new_n), new_n / (old_n + new_n)
+
+        for layer in ("声线", "思维", "性格"):
+            cur_l = current.setdefault(layer, {}) or {}
+            inc_l = incoming.get(layer, {}) or {}
+            cur_l = dict(cur_l)
+            for key, inc_v in inc_l.items():
+                if key == "置信度":
+                    continue
+                cur_v = cur_l.get(key)
+                if isinstance(inc_v, list) and key != "价值观":
+                    merged = list(inc_v) + [x for x in (cur_v or []) if x not in inc_v]
+                    cur_l[key] = merged[:12]
+                elif isinstance(inc_v, (int, float)) and isinstance(cur_v, (int, float)):
+                    cur_l[key] = round(float(cur_v) * w_old + float(inc_v) * w_new, 3)
+                elif isinstance(inc_v, str):
+                    if not cur_v or cur_v in ("未知", "混合型", "") or inc_v not in ("未知", "混合型", ""):
+                        if inc_v:
+                            cur_l[key] = inc_v
+                else:
+                    cur_l[key] = inc_v
+            # 置信度随语料量增长
+            cur_l["置信度"] = round(min(1.0, (cur_l.get("置信度", 0.0) or 0.0) + new_n / 500.0), 2)
+            current[layer] = cur_l
+
+        prints = list(current.get("来源素材", []))
+        for fp in incoming.get("来源素材", []) or []:
+            if fp not in prints:
+                prints.append(fp)
+        current["来源素材"] = prints
+        current["语料量"] = old_n + new_n
+        current["版本"] = int(current.get("版本", 1)) + 1
+        self._write(slug, current, snapshot=True)
+        return current
+
+    # ---------- 纠偏层（Correction） ----------
+
+    def correct(self, slug: str, wrong: str, right: str = "") -> Dict[str, Any]:
+        """对话纠偏：「ta 不会这样说，ta 会这样说」——写入即生效
+
+        Args:
+            wrong: 不该出现的说法
+            right: 应该改成什么；为空表示「直接禁用」
+        """
+        persona = self.get(slug)
+        if persona is None:
+            raise KeyError(f"人格不存在：{slug}")
+        persona.setdefault("纠偏", []).append({
+            "wrong": (wrong or "").strip(),
+            "right": (right or "").strip(),
+            "created_at": _now(),
+        })
+        persona["纠偏"] = persona["纠偏"][-50:]      # 只留最近 50 条，防止无限膨胀
+        persona["版本"] = int(persona.get("版本", 1)) + 1
+        self._write(slug, persona, snapshot=True)
+        return persona
+
+    def corrections(self, slug: str) -> List[Dict[str, str]]:
+        persona = self.get(slug) or {}
+        return persona.get("纠偏", []) or []
+
+    def apply_corrections(self, text: str, corrections: Sequence[Dict[str, str]]) -> str:
+        """把纠偏规则应用到一段文本（编译摘要与后处理都会走这里）"""
+        out = text or ""
+        for c in corrections or []:
+            wrong = c.get("wrong", "").strip()
+            right = c.get("right", "").strip()
+            if not wrong:
+                continue
+            if right:
+                out = out.replace(wrong, right)
+            else:
+                out = out.replace(wrong, "")
+        return re.sub(r"\s{2,}", " ", out).strip()
+
+    # ---------- 版本管理 ----------
+
+    def _snapshot(self, slug: str, persona: Dict[str, Any]) -> None:
+        """写入前自动存档
+
+        - 首次创建：把新建的人格存为 v1（保证「删除后仍可找回」）
+        - 后续更新：把**更新前**的旧状态存档，版本号取旧状态的版本
+        """
+        p = self._path(slug)
+        if p.exists():
+            archived = json.loads(p.read_text(encoding="utf-8"))
+        else:
+            archived = persona
+        vdir = self.versions_root / slug
+        vdir.mkdir(parents=True, exist_ok=True)
+        version = int(archived.get("版本", 1))
+        with open(vdir / f"v{version}.json", "w", encoding="utf-8") as f:
+            json.dump(archived, f, ensure_ascii=False, indent=2)
+
+    def versions(self, slug: str) -> List[int]:
+        vdir = self.versions_root / slug
+        if not vdir.exists():
+            return []
+        nums = []
+        for f in vdir.glob("v*.json"):
+            try:
+                nums.append(int(f.stem[1:]))
+            except ValueError:
+                continue
+        return sorted(nums)
+
+    def rollback(self, slug: str, version: int) -> Optional[Dict[str, Any]]:
+        """回滚到指定版本（当前状态先存档，可再回滚回来）"""
+        vfile = self.versions_root / slug / f"v{version}.json"
+        if not vfile.exists():
+            return None
+        with open(vfile, "r", encoding="utf-8") as f:
+            old = json.load(f)
+        old["版本"] = int(old.get("版本", version)) + 1
+        self._write(slug, old, snapshot=True)
+        return old
+
+    # ---------- 在线编译 ----------
+
+    def compile_summary(self, slug: str, budget: Optional[int] = None) -> str:
+        """编译成在线注入的人格指令（默认 100 Token 硬预算）
+
+        五层 → 一行紧凑指令；纠偏规则作为硬规则优先拼接。
+        超预算直接截断，绝不让人格段挤占其它模块。
+        """
+        from scripts.persona.extract import build_layers
+
+        limit = int(budget if budget is not None
+                    else schema.DEFAULT_INJECTION_BUDGET["人格指令"])
+        persona = self.get(slug)
+        if persona is None:
+            return ""
+        layers = build_layers(persona)
+        corrections = self.corrections(slug)
+
+        parts: List[str] = []
+        identity = layers.get("身份", "")
+        if identity:
+            parts.append(f"你是{identity}" if not identity.startswith("你是") else identity)
+        style = layers.get("说话风格", "")
+        if style:
+            parts.append("说话：" + style)
+        emotion = layers.get("情感模式", "")
+        if emotion:
+            parts.append("情绪：" + emotion)
+        behavior = layers.get("人际行为", "")
+        if behavior:
+            parts.append(behavior)
+
+        # 纠偏规则优先，硬规则最后（都在预算内，超了从后往前砍）
+        correction_text = ""
+        if corrections:
+            rules = [f"不要说「{c['wrong']}」" + (f"，要说「{c['right']}」" if c["right"] else "")
+                     for c in corrections[-5:]]
+            correction_text = self.apply_corrections("；".join(rules), [])
+        if correction_text:
+            parts.insert(1, "纠偏：" + correction_text)
+
+        hard = layers.get("硬规则", [])
+        if hard:
+            parts.append("底线：" + "；".join(hard[:3]))
+
+        summary = "。".join(p for p in parts if p)
+        summary = self.apply_corrections(summary, corrections)
+        if estimate_tokens(summary) > limit:
+            summary = truncate_to_tokens(summary, limit)
+        return summary
+
+    # ---------- 导出 ----------
+
+    def export(self, slug: str) -> str:
+        persona = self.get(slug) or {}
+        return json.dumps(persona, ensure_ascii=False, indent=2)
+
+    def purge(self, slug: str) -> int:
+        """彻底清除（含历史版本）——数据主权"""
+        removed = 0
+        p = self._path(slug)
+        if p.exists():
+            p.unlink()
+            removed += 1
+        vdir = self.versions_root / slug
+        if vdir.exists():
+            for f in vdir.glob("*.json"):
+                f.unlink()
+                removed += 1
+            try:
+                vdir.rmdir()
+            except OSError:
+                pass
+        index = self._load_index()
+        index.pop(slug, None)
+        self._save_index(index)
+        return removed
+
+
+if __name__ == "__main__":
+    import sys
+    lib = PersonaLibrary()
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "list"
+    if cmd == "list":
+        print(json.dumps(lib.list(), ensure_ascii=False, indent=2))
+    elif cmd == "summary" and len(sys.argv) > 2:
+        s = lib.compile_summary(sys.argv[2])
+        print(s)
+        print(f"[tokens ~{estimate_tokens(s)}]")
+    else:
+        print("用法: library.py list | summary <slug>")

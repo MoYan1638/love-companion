@@ -26,7 +26,7 @@ import json
 import os
 import sys
 from pathlib import Path
-from typing import Any, Callable, Dict, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 ROOT = Path(__file__).resolve().parents[2]
 if str(ROOT) not in sys.path:
@@ -112,6 +112,83 @@ def _task_memory_decay(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str
     store = MemoryStore(ctx["data_dir"])
     changed = store.decay()
     return {"decayed": changed}
+
+
+@register("persona.build")
+def _task_persona_build(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """从素材文件构建 / 增量合并伴侣人格（离线，重活不占对话）"""
+    from scripts.persona import parser, extract, library
+
+    name = payload.get("name") or payload.get("speaker") or "对方"
+    nickname = payload.get("nickname") or name
+    corpus: List[Dict[str, Any]] = []
+    prints: List[str] = []
+
+    files = payload.get("files") or []
+    if files:
+        corpus, prints = parser.parse_many(files, default_speaker=name)
+    for item in payload.get("corpus") or []:
+        corpus.append({
+            "speaker": item.get("speaker", name),
+            "text": item.get("text", ""),
+            "ts": item.get("ts", ""),
+            "redacted": [],
+        })
+
+    if payload.get("speaker"):
+        corpus = parser.only(corpus, payload["speaker"])
+    if not corpus:
+        return {"ok": False, "reason": "无有效语料"}
+
+    persona = extract.extract_persona(corpus, name=name, nickname=nickname, source_prints=prints)
+    lib = library.PersonaLibrary(ctx["data_dir"])
+    slug = payload.get("slug") or library.slugify(nickname)
+    if lib.exists(slug):
+        lib.merge(slug, persona)
+        action = "merged"
+    else:
+        lib.create(persona, slug)
+        action = "created"
+    return {"ok": True, "action": action, "slug": slug, "语料量": len(corpus),
+            "版本": (lib.get(slug) or {}).get("版本")}
+
+
+@register("persona.correct")
+def _task_persona_correct(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """对话纠偏：写入即生效（离线落盘，下次编译摘要自动带上）"""
+    from scripts.persona.library import PersonaLibrary
+    lib = PersonaLibrary(ctx["data_dir"])
+    lib.correct(payload["slug"], payload["wrong"], payload.get("right", ""))
+    return {"ok": True, "corrections": len(lib.corrections(payload["slug"]))}
+
+
+@register("mirror.record")
+def _task_mirror_record(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """记录一次关系事件（亲密/冲突/里程碑/和解），驱动关系演化建模"""
+    from scripts.persona.mirror import MirrorModel
+    m = MirrorModel(ctx["data_dir"])
+    m.record(payload["slug"], payload.get("kind", "日常"),
+             payload.get("note", ""), payload.get("delta"))
+    return {"ok": True, "stage": m.stage(payload["slug"]),
+            "亲密度": m.intimacy(payload["slug"])}
+
+
+@register("care.evaluate")
+def _task_care_evaluate(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[str, Any]:
+    """判定是否该主动关怀，若该则一并生成话术（话术也走离线，不占主生成）"""
+    from scripts.care.templates import compose
+    from scripts.care.trigger import CareTrigger
+
+    t = CareTrigger(ctx["data_dir"], config=payload.get("config"))
+    verdict = t.evaluate()
+    if not verdict.get("should"):
+        return {"should": False, "reason": verdict.get("reason", "")}
+
+    slug = payload.get("slug", "")
+    out = compose(verdict["kind"], slug, ctx["data_dir"], detail=payload.get("detail", ""))
+    t.mark_sent(verdict["kind"])
+    return {"should": True, "kind": verdict["kind"], "reason": verdict.get("reason", ""),
+            "hint": verdict.get("next_hint", ""), "text": out["text"], "tokens": out["tokens"]}
 
 
 def main() -> int:
