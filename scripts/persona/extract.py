@@ -275,52 +275,13 @@ def extract_persona(corpus: Sequence[Dict[str, Any]], name: str = "",
     return persona
 
 
-# ---------------- 5 层人格模型（在线注入用） ----------------
-
-def build_layers(persona: Dict[str, Any]) -> Dict[str, Any]:
-    """把三层提取结果编译成 crush-skills 的 5 层人格模型
-
-    硬规则 → 身份 → 说话风格 → 情感模式 → 人际行为
-    这是「在线注入」时真正生效的形态，编译后由 library.compile_summary 压到预算内。
-    """
-    voice = persona.get("声线", {}) or {}
-    think = persona.get("思维", {}) or {}
-    char = persona.get("性格", {}) or {}
-
-    hard_rules = ["不许编造没发生过的事", "不许替对方做决定"]
-    if char.get("冲突应对") == "冷战":
-        hard_rules.append("冲突时不追问、不逼答，给台阶")
-    if float(voice.get("emoji频率", 0)) >= 0.5:
-        hard_rules.append("适当带表情，但每轮不超过两个")
-
-    identity = persona.get("姓名") or persona.get("昵称") or "ta"
-    vals = think.get("价值观") or []
-    if vals:
-        identity += f"；看重{'/'.join(vals[:3])}"
-
-    style_parts = [voice.get("句式") or ""]
-    if voice.get("口头禅"):
-        style_parts.append("口头禅：" + "、".join(voice["口头禅"][:4]))
-    if voice.get("语气词"):
-        style_parts.append("句尾常用" + "、".join(voice["语气词"][:3]))
-    if voice.get("标点习惯"):
-        style_parts.append("标点：" + voice["标点习惯"])
-
-    emotion = char.get("情绪反应模式") or ""
-    if char.get("情绪效价") is not None:
-        emotion += f"（效价 {char['情绪效价']}）"
-
-    behavior = f"决策{think.get('决策逻辑', '未知')}；冲突时{char.get('冲突应对', '未知')}"
-    if think.get("关注顺序"):
-        behavior += "；常聊" + "、".join(think["关注顺序"][:4])
-
-    return {
-        "硬规则": hard_rules,
-        "身份": identity,
-        "说话风格": "；".join(p for p in style_parts if p),
-        "情感模式": emotion,
-        "人际行为": behavior,
-    }
+# ---------------- 在线注入 ----------------
+#
+# 注意：这里**不**产出 crush-skills 的 5 层人格模型（硬规则/身份/话风/情感/行为）。
+# love-companion 自己的人设体系是 persona.json 的
+# 姓名/性格/对话风格/背景故事/相处模式/亲密尺度/内容边界 + 8 套预设，
+# 在线注入的形态是 scripts/persona/adapt.py::lover_card() 编译的「恋人行为卡」。
+# 三层提取只负责把素材翻译成结构化特征，落回 v1 人设字段由 adapt.apply_to_v1 完成。
 
 
 if __name__ == "__main__":
@@ -336,4 +297,8 @@ if __name__ == "__main__":
     ] * 4)
     corpus = parser.parse_text(demo)
     p = extract_persona(parser.only(corpus, "小美"), name="小美")
-    print(json.dumps({"三层": p, "五层": build_layers(p)}, ensure_ascii=False, indent=2))
+
+    from scripts.persona.adapt import apply_to_v1, lover_card
+    v1 = apply_to_v1({}, p)
+    print(json.dumps({"三层提取": p, "回写后的 v1 人设": v1, "恋人行为卡": lover_card(v1)},
+                     ensure_ascii=False, indent=2))

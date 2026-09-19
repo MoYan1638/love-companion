@@ -25,6 +25,7 @@ import argparse
 import json
 import os
 import sys
+from datetime import datetime
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
@@ -180,13 +181,20 @@ def _task_care_evaluate(payload: Dict[str, Any], ctx: Dict[str, Any]) -> Dict[st
     from scripts.care.trigger import CareTrigger
 
     t = CareTrigger(ctx["data_dir"], config=payload.get("config"))
-    verdict = t.evaluate()
+    # payload.now 便于手动触发与测试；不传就用真实时刻（静默时段照常生效）
+    now = None
+    if payload.get("now"):
+        try:
+            now = datetime.fromisoformat(payload["now"])
+        except (TypeError, ValueError):
+            now = None
+    verdict = t.evaluate(now)
     if not verdict.get("should"):
         return {"should": False, "reason": verdict.get("reason", "")}
 
     slug = payload.get("slug", "")
     out = compose(verdict["kind"], slug, ctx["data_dir"], detail=payload.get("detail", ""))
-    t.mark_sent(verdict["kind"])
+    t.mark_sent(verdict["kind"], now)
     return {"should": True, "kind": verdict["kind"], "reason": verdict.get("reason", ""),
             "hint": verdict.get("next_hint", ""), "text": out["text"], "tokens": out["tokens"]}
 

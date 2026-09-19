@@ -42,15 +42,66 @@ MOOD_TONE: Dict[str, Dict[str, str]] = {
     "纪念": {"色调": "复古暖黄", "光线": "烛光或串灯", "氛围": "有仪式感但不过度"},
 }
 
-# 价值观 → 构图与元素
-VALUE_ELEMENTS: Dict[str, Dict[str, str]] = {
-    "浪漫": {"构图": "近景、留白", "元素": "花、日落、手写卡片"},
-    "自由": {"构图": "远景、开阔地平线", "元素": "公路、天空、车窗"},
-    "家庭": {"构图": "中景、生活场景", "元素": "餐桌、毛毯、猫"},
-    "成长": {"构图": "桌面俯拍", "元素": "书、咖啡、笔记本"},
-    "健康": {"构图": "自然光全身或半身", "元素": "晨跑、绿植、水杯"},
-    "旅行": {"构图": "广角风景", "元素": "山、海、陌生街角"},
+# v1 人设「关心方式」→ 恋人会发什么图
+# 依据：恋人发图不是"配图"，是**把此刻的生活递给对方看**。
+# 关心方式决定了 ta 递过来的是细节、行踪，还是一句配文。
+CARE_TO_SUBJECT: Dict[str, Dict[str, str]] = {
+    "细节": {"主体": "手边的细小事物", "构图": "近景特写、浅景深",
+             "元素": "杯沿的水渍、刚买的水果、窗台的一小片光"},
+    "行动": {"主体": "正在为你做的事", "构图": "第一视角、俯拍",
+             "元素": "做好的饭、替你排的队、走到一半的路"},
+    "语言": {"主体": "景，配文才是重点", "构图": "随手拍、不讲究",
+             "元素": "天空、路边的花、下班路上的街"},
+    "陪伴": {"主体": "ta 此刻所在的地方", "构图": "平视、生活场景",
+             "元素": "沙发一角、桌上的书、窗外的天"},
 }
+DEFAULT_SUBJECT: Dict[str, str] = {
+    "主体": "此刻在看的风景", "构图": "随手拍、平视", "元素": "天空、街景、手边的东西",
+}
+
+# 亲密尺度 → 允许的拍摄距离（love-companion 自己的安全边界，不是通用审美）
+# 尺度低意味着关系还在含蓄阶段，发过于私密的自拍会破坏人设与安全边界。
+INTIMACY_FRAME: Dict[str, Dict[str, str]] = {
+    "低": {"距离": "只拍物与景，不出现人物", "禁忌元素": ["自拍", "床", "睡衣", "浴室"]},
+    "中": {"距离": "可出现局部人物（手、侧影）", "禁忌元素": ["床", "睡衣", "浴室"]},
+    "高": {"距离": "可出现完整人物，居家场景也行", "禁忌元素": []},
+}
+
+
+def _current_v1_persona(data_dir: str) -> Dict[str, Any]:
+    """读当前生效的 v1 人设（没蒸馏过素材的用户也能出图）"""
+    try:
+        import sys
+        from pathlib import Path as _Path
+        root = _Path(__file__).resolve().parents[2]
+        if str(root) not in sys.path:
+            sys.path.insert(0, str(root))
+        from scripts.manager import LoveCompanionManager
+        return LoveCompanionManager(data_dir).get_persona()
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def intimacy_level(scale: Any) -> str:
+    """v1 亲密尺度 → 拍摄距离档"""
+    try:
+        s = int(scale)
+    except (TypeError, ValueError):
+        return "中"
+    if s <= 2:
+        return "低"
+    if s >= 4:
+        return "高"
+    return "中"
+
+
+def _care_subject(care_text: str) -> Dict[str, str]:
+    """按 v1 关心方式的关键词挑拍什么（文案是自然语言，只能关键词匹配）"""
+    text = care_text or ""
+    for key, subj in CARE_TO_SUBJECT.items():
+        if key in text:
+            return subj
+    return DEFAULT_SUBJECT
 
 # 图文衔接话术：按情绪给一句，避免「给你看张图」这种突兀句式
 CAPTIONS: Dict[str, List[str]] = {
@@ -139,18 +190,30 @@ class ImagePlanner:
 
     def style_for(self, persona: Optional[Dict[str, Any]], mood: str = "日常",
                   now: Optional[datetime] = None) -> Dict[str, str]:
-        """从人格与情绪推导配图风格，确保「像 ta 会发的图」"""
+        """从 **v1 人设** 与情绪推导「ta 会发什么图」
+
+        persona 是 v1 人设结构（姓名/相处模式/亲密尺度/内容边界），
+        不是三层提取结果——这里是 love-companion 自己的定制点：
+        拍什么由关心方式决定，能拍多近由亲密尺度决定，什么不能拍由内容边界决定。
+        """
         now = now or datetime.now()
         persona = persona or {}
         tone = dict(MOOD_TONE.get(mood, MOOD_TONE["日常"]))
 
-        values = (persona.get("思维") or {}).get("价值观") or []
-        composition, elements = "中景、平视", "生活细节"
-        for v in values:
-            if v in VALUE_ELEMENTS:
-                composition = VALUE_ELEMENTS[v]["构图"]
-                elements = VALUE_ELEMENTS[v]["元素"]
-                break
+        relation = persona.get("相处模式") or {}
+        subject = _care_subject(relation.get("关心方式") or "")
+        composition, elements = subject["构图"], subject["元素"]
+
+        # 亲密尺度约束拍摄距离；触禁忌就退回拍物
+        level = intimacy_level(persona.get("亲密尺度"))
+        frame = INTIMACY_FRAME[level]
+        if any(bad in elements for bad in frame["禁忌元素"]):
+            elements = subject["元素"]
+
+        # 内容边界一票否决：命中任何边界关键词就换成最安全的景
+        from scripts.core import boundary
+        if boundary.hit(elements, persona.get("内容边界") or []):
+            elements = "天空、路边的植物"
 
         if now.hour >= int(self.config["深夜起始"]):
             tone["色调"] = "夜色低饱和"
@@ -158,7 +221,8 @@ class ImagePlanner:
             elements = "窗、夜景、暖色小灯"
 
         return {"色调": tone["色调"], "光线": tone["光线"], "氛围": tone["氛围"],
-                "构图": composition, "元素": elements}
+                "构图": composition, "元素": elements,
+                "主体": subject["主体"], "拍摄距离": frame["距离"]}
 
     # ---------- 衔接 ----------
 
@@ -199,13 +263,17 @@ class ImagePlanner:
 
         from scripts.persona.library import PersonaLibrary
         lib = PersonaLibrary(data_dir or str(self.data_dir))
-        persona = lib.get(slug) or {}
-        voice = persona.get("声线")
-        style = self.style_for(persona, mood, now)
-        text = self.caption(mood, voice, lib.corrections(slug))
+        entry = lib.get(slug) or {}
+        corrections = lib.corrections(slug)
+        # 优先用蒸馏回写的 v1 人设；没蒸馏过就用当前 persona.json（含 8 套预设）
+        v1 = entry.get("v1人设") or _current_v1_persona(data_dir or str(self.data_dir))
+        voice = entry.get("声线")
+        style = self.style_for(v1, mood, now)
+        text = self.caption(mood, voice, corrections)
 
-        hint = (f"{style['构图']}，{style['元素']}，{style['色调']}，"
-                f"{style['光线']}，氛围{style['氛围']}，写实摄影感，不做过度修饰")
+        hint = (f"{style['主体']}；{style['构图']}；画面里有{style['元素']}；"
+                f"{style['色调']}，{style['光线']}，氛围{style['氛围']}；"
+                f"{style['拍摄距离']}；写实生活照质感，不要商业摆拍")
         return {
             "should": True, "reason": "", "mood": mood, "style": style,
             "caption": text, "prompt_hint": hint, "tokens": estimate_tokens(text),

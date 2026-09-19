@@ -91,11 +91,17 @@ class Session:
             except Exception:  # noqa: BLE001
                 pass
 
-        # 人格指令（M3a）
-        if self._on("人格克隆") and self.slug:
+        # 人格指令（M3a）：蒸馏过素材用人格库，否则直接用当前 v1 人设
+        # （含 8 套预设）——没蒸馏的用户不该拿到空的人设
+        if self._on("人格克隆"):
             try:
+                from scripts.persona.adapt import from_v1_file
                 from scripts.persona.library import PersonaLibrary
-                summary = PersonaLibrary(self.data_dir).compile_summary(self.slug)
+                summary = ""
+                if self.slug:
+                    summary = PersonaLibrary(self.data_dir).compile_summary(self.slug)
+                if not summary:
+                    summary = from_v1_file(self.data_dir)
                 if summary:
                     inj.add("人格指令", summary)
             except Exception:  # noqa: BLE001

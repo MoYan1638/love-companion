@@ -146,7 +146,7 @@ class Controls:
         Returns:
             {"persona": 0/1, "relation": 0/1, "memories": n}
         """
-        result = {"persona": 0, "relation": 0, "memories": 0}
+        result = {"persona": 0, "relation": 0, "memories": 0, "persona_v1": 0}
         try:
             from scripts.persona.library import PersonaLibrary
             lib = PersonaLibrary(str(self.data_dir))
@@ -167,6 +167,25 @@ class Controls:
                 result["memories"] = MemoryStore(str(self.data_dir)).delete_conversation(slug)
             except Exception:  # noqa: BLE001
                 pass
+
+        # 当前生效的 persona.json 通常就是这段关系的人设；
+        # 人格库清了而 persona.json 留着，等于「忘了人却还顶着她的名字说话」
+        try:
+            from pathlib import Path as _P
+            import sys as _sys
+            root = _P(__file__).resolve().parents[2]
+            if str(root) not in _sys.path:
+                _sys.path.insert(0, str(root))
+            from scripts.manager import LoveCompanionManager
+            manager = LoveCompanionManager(str(self.data_dir))
+            pf = self.data_dir / "persona.json"
+            if pf.exists():
+                manager.reset_persona()
+                result["persona_v1"] = 1
+            else:
+                result["persona_v1"] = 0
+        except Exception:  # noqa: BLE001
+            result["persona_v1"] = 0
         return result
 
     # ---------- 数据主权 ----------

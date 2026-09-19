@@ -203,7 +203,6 @@ class MirrorModel:
 
         检查项：纠偏层命中 / 硬规则 / 句长严重偏离 / emoji 过量 / 编造式承诺
         """
-        from scripts.persona.extract import build_layers
         from scripts.persona.library import PersonaLibrary
 
         issues: List[str] = []
@@ -211,6 +210,7 @@ class MirrorModel:
         persona = lib.get(slug)
         if persona is None:
             return True, []
+        v1 = persona.get("v1人设") or {}
 
         for c in lib.corrections(slug):
             wrong = (c.get("wrong") or "").strip()
@@ -229,10 +229,15 @@ class MirrorModel:
         elif expected > 0 and got > int(expected * 3) + 1:
             issues.append(f"emoji 过量：ta 平均 {expected:.1f} 个/条，这条 {got} 个")
 
-        layers = build_layers(persona)
-        for rule in layers.get("硬规则", []) or []:
-            if "不许编造" in rule and re.search(r"(我们(曾经|之前)说过|你说过|你记得吗)", reply or ""):
-                issues.append("疑似编造共同经历")
+        # 真实性红线：不得编造共同经历
+        if re.search(r"(我们(曾经|之前)说过|你说过|你记得吗)", reply or ""):
+            issues.append("疑似编造共同经历")
+
+        # 内容边界：v1 人设里用户明确划的红线。
+        # 用户写的是「不谈前任」，真正的禁区是「前任」，靠 core/boundary 还原
+        from scripts.core import boundary
+        for b in boundary.hit(reply or "", v1.get("内容边界") or []):
+            issues.append(f"触碰内容边界：{b}")
 
         return (not issues), issues
 

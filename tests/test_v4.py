@@ -160,13 +160,58 @@ class TestExtract(unittest.TestCase):
         for fn in (extract.extract_voice, extract.extract_thinking, extract.extract_character):
             self.assertIsInstance(fn([]), dict)
 
-    def test_five_layers(self):
+    def test_three_layers_map_to_v1_persona(self):
+        """三层提取必须能回写进 v1 人设字段，而不是另立一套体系"""
+        from scripts.persona.adapt import apply_to_v1, lover_card
+        p = extract.extract_persona(self.corpus, name="小美", nickname="美美")
+        v1 = apply_to_v1({}, p)
+        for key in ("对话风格", "性格", "相处模式"):
+            self.assertIn(key, v1)
+        self.assertTrue(v1["对话风格"].get("口头禅"), "声线应映射到对话风格.口头禅")
+        self.assertTrue(v1["性格"].get("核心特质"), "性格层应映射到性格.核心特质")
+
+    def test_distill_never_touches_safety_fields(self):
+        """亲密尺度 / 内容边界 / 称呼是用户显式设置，蒸馏无权改"""
+        from scripts.persona.adapt import apply_to_v1
+        base = {"亲密尺度": 2, "内容边界": ["不谈前任"], "对用户的称呼": "宝贝"}
         p = extract.extract_persona(self.corpus, name="小美")
-        layers = extract.build_layers(p)
-        for key in ("硬规则", "身份", "说话风格", "情感模式", "人际行为"):
-            self.assertIn(key, layers)
-        self.assertTrue(layers["硬规则"], "硬规则不能为空")
-        self.assertIn("小美", layers["身份"])
+        out = apply_to_v1(base, p)
+        self.assertEqual(out["亲密尺度"], 2)
+        self.assertEqual(out["内容边界"], ["不谈前任"])
+        self.assertEqual(out["对用户的称呼"], "宝贝")
+
+    def test_distill_does_not_overwrite_written_persona(self):
+        """用户手写的对话风格不该被蒸馏结果覆盖（overwrite=False）"""
+        from scripts.persona.adapt import apply_to_v1
+        base = {"对话风格": {"语气": "手写的一句话", "口头禅": ["手写"], "语言习惯": ""}}
+        p = extract.extract_persona(self.corpus, name="小美")
+        out = apply_to_v1(base, p)
+        self.assertEqual(out["对话风格"]["语气"], "手写的一句话")
+        self.assertEqual(out["对话风格"]["口头禅"], ["手写"])
+
+    def test_lover_card_from_v1_persona(self):
+        from scripts.persona.adapt import lover_card
+        v1 = {
+            "姓名": "小晴", "对用户的称呼": "宝贝",
+            "对话风格": {"语气": "句尾带呀", "口头禅": ["想我了吗"], "语言习惯": "短句连发"},
+            "性格": {"核心特质": ["温柔"], "小脾气": ["闹别扭不说话"], "情绪表达": "外放"},
+            "相处模式": {"主动程度": "高", "撒娇频率": "高", "关心方式": "细节型"},
+            "亲密尺度": 3, "内容边界": ["不谈前任"],
+        }
+        card = lover_card(v1)
+        self.assertIn("小晴", card)
+        self.assertIn("宝贝", card)
+        self.assertIn("亲密尺度 3", card)
+        self.assertIn("不谈前任", card)
+        self.assertLessEqual(estimate_tokens(card),
+                             schema.DEFAULT_INJECTION_BUDGET["人格指令"])
+
+    def test_lover_card_within_budget(self):
+        from scripts.persona.adapt import lover_card
+        v1 = {"姓名": "小晴" * 30, "对用户的称呼": "宝贝" * 20,
+              "对话风格": {"语气": "呀" * 50, "口头禅": ["测试"] * 20}}
+        self.assertLessEqual(estimate_tokens(lover_card(v1)),
+                             schema.DEFAULT_INJECTION_BUDGET["人格指令"])
 
 
 # ==================== library ====================
@@ -342,6 +387,20 @@ class TestMirror(TempDataMixin):
         self.assertFalse(ok)
         self.assertTrue(any("纠偏" in i for i in issues))
 
+    def test_consistency_flags_content_boundary(self):
+        """v1 人设的「内容边界」必须拦住回复"""
+        p = self.lib.get("美美")
+        p["v1人设"] = {"内容边界": ["不谈前任"]}
+        self.lib._write("美美", p)
+        ok, issues = self.m.consistency("你前任也不是那样吧", "美美")
+        self.assertFalse(ok)
+        self.assertTrue(any("内容边界" in i for i in issues))
+
+    def test_consistency_flags_fabricated_memory(self):
+        ok, issues = self.m.consistency("我们之前说过去看海的，你记得吗", "美美")
+        self.assertFalse(ok)
+        self.assertTrue(any("编造" in i for i in issues))
+
     def test_consistency_flags_emoji_overuse(self):
         p = self.lib.get("美美")
         p["声线"]["emoji频率"] = 0.0
@@ -393,16 +452,19 @@ class TestCareTrigger(TempDataMixin):
         self.assertIn("静默", verdict["reason"])
 
     def test_daily_cap(self):
+        # 显式指定时刻：否则测试在凌晨跑会被「静默时段」先拦下，测不到上限逻辑
+        now = datetime.now().replace(hour=15)
         t = care_trigger.CareTrigger(self.data_dir, {"每日上限": 1, "冷却小时": 0})
-        t.mark_sent("久未联系")
-        verdict = t.evaluate()
+        t.mark_sent("久未联系", now)
+        verdict = t.evaluate(now)
         self.assertFalse(verdict["should"])
         self.assertIn("上限", verdict["reason"])
 
     def test_cooldown(self):
+        now = datetime.now().replace(hour=15)
         t = care_trigger.CareTrigger(self.data_dir, {"冷却小时": 6})
-        t.mark_sent("久未联系")
-        self.assertFalse(t.evaluate()["should"])
+        t.mark_sent("久未联系", now)
+        self.assertFalse(t.evaluate(now)["should"])
 
     def test_user_prefers_low_proactivity(self):
         self.write_json("user_persona.json", dict(
@@ -559,9 +621,10 @@ class TestPipelineIntegration(TempDataMixin):
         # 用真实时钟往前推 20 小时造「久未联系」信号，避免测试依赖运行时刻
         from datetime import timedelta
         past = (datetime.now() - timedelta(hours=20)).isoformat(timespec="seconds")
+        probe = datetime.now().replace(hour=15)
         self.write_json("user_signals.json", [{"ts": past, "emotion": None, "topics": []}])
         queue = TaskQueue(self.data_dir)
-        queue.enqueue("care.evaluate", {"slug": "美美"})
+        queue.enqueue("care.evaluate", {"slug": "美美", "now": probe.isoformat()})
         report = run_idle(self.data_dir)
         self.assertEqual(report["done"], 1)
 

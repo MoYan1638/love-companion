@@ -234,10 +234,17 @@ class TestImagePlanner(TempDataMixin):
         self.assertIn("夜", style["色调"])
         self.assertIn("夜", style["元素"])
 
-    def test_style_from_persona_values(self):
-        persona = {"思维": {"价值观": ["自由", "旅行"]}}
+    def test_style_from_care_style(self):
+        """拍什么由 v1 的关心方式决定（不是参考项目的「价值观 → 审美构图」）"""
+        persona = {"相处模式": {"关心方式": "细节型关心，会注意你没说的小事"}}
         style = self.planner.style_for(persona, "日常")
-        self.assertIn("开阔", style["构图"])
+        self.assertIn("细小事物", style["主体"])
+
+    def test_intimacy_scale_limits_framing(self):
+        low = self.planner.style_for({"亲密尺度": 1}, "日常")
+        high = self.planner.style_for({"亲密尺度": 5}, "日常")
+        self.assertEqual(low["拍摄距离"], "只拍物与景，不出现人物")
+        self.assertEqual(high["拍摄距离"], "可出现完整人物，居家场景也行")
 
     def test_caption_in_budget(self):
         text = self.planner.caption("想念", {"语气词": ["呀"], "emoji频率": 0.9})

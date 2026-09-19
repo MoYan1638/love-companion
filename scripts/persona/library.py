@@ -39,6 +39,13 @@ def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
 
 
+def _to_v1(extracted: Dict[str, Any], base: Optional[Dict[str, Any]] = None,
+           overwrite: bool = False) -> Dict[str, Any]:
+    """三层提取 → v1 人设（内部小工具，见 persona/adapt.py）"""
+    from scripts.persona.adapt import apply_to_v1
+    return apply_to_v1(base, extracted, overwrite=overwrite)
+
+
 def slugify(name: str) -> str:
     """中文名也能安全做文件名；空名回退到时间戳"""
     s = _UNSAFE.sub("-", (name or "").strip()).strip("-")
@@ -98,6 +105,7 @@ class PersonaLibrary:
         persona = dict(persona)
         persona.setdefault("schema_version", schema.SCHEMA_VERSION)
         persona.setdefault("纠偏", [])
+        persona["v1人设"] = _to_v1(persona)
         persona["版本"] = 1
         persona["created_at"] = _now()
         persona["updated_at"] = _now()
@@ -179,6 +187,8 @@ class PersonaLibrary:
                 prints.append(fp)
         current["来源素材"] = prints
         current["语料量"] = old_n + new_n
+        # 三层合并完，重新回写 v1 人设（已有值不覆盖，只填空）
+        current["v1人设"] = _to_v1(current, base=current.get("v1人设"))
         current["版本"] = int(current.get("版本", 1)) + 1
         self._write(slug, current, snapshot=True)
         return current
@@ -268,53 +278,76 @@ class PersonaLibrary:
     # ---------- 在线编译 ----------
 
     def compile_summary(self, slug: str, budget: Optional[int] = None) -> str:
-        """编译成在线注入的人格指令（默认 100 Token 硬预算）
+        """编译成在线注入的「恋人行为卡」（默认 100 Token 硬预算）
 
-        五层 → 一行紧凑指令；纠偏规则作为硬规则优先拼接。
-        超预算直接截断，绝不让人格段挤占其它模块。
+        love-companion 自己的形态：由 v1 人设字段（姓名/对用户的称呼/对话风格/
+        性格/相处模式/亲密尺度/内容边界）编译，而非参考项目的 5 层人格模型。
+        纠偏规则作为底线追加。超预算直接截断，绝不让人格段挤占其它模块。
         """
-        from scripts.persona.extract import build_layers
+        from scripts.persona.adapt import lover_card
 
         limit = int(budget if budget is not None
                     else schema.DEFAULT_INJECTION_BUDGET["人格指令"])
         persona = self.get(slug)
         if persona is None:
             return ""
-        layers = build_layers(persona)
+        v1 = persona.get("v1人设") or _to_v1(persona)
+        card = lover_card(v1, budget=limit)
+
         corrections = self.corrections(slug)
-
-        parts: List[str] = []
-        identity = layers.get("身份", "")
-        if identity:
-            parts.append(f"你是{identity}" if not identity.startswith("你是") else identity)
-        style = layers.get("说话风格", "")
-        if style:
-            parts.append("说话：" + style)
-        emotion = layers.get("情感模式", "")
-        if emotion:
-            parts.append("情绪：" + emotion)
-        behavior = layers.get("人际行为", "")
-        if behavior:
-            parts.append(behavior)
-
-        # 纠偏规则优先，硬规则最后（都在预算内，超了从后往前砍）
-        correction_text = ""
         if corrections:
             rules = [f"不要说「{c['wrong']}」" + (f"，要说「{c['right']}」" if c["right"] else "")
-                     for c in corrections[-5:]]
-            correction_text = self.apply_corrections("；".join(rules), [])
-        if correction_text:
-            parts.insert(1, "纠偏：" + correction_text)
+                     for c in corrections[-3:]]
+            room = limit - estimate_tokens(card) - estimate_tokens("。纠偏：")
+            if room > 0:
+                card = card + "。纠偏：" + truncate_to_tokens("；".join(rules), room)
+        return self.apply_corrections(card, corrections)
 
-        hard = layers.get("硬规则", [])
-        if hard:
-            parts.append("底线：" + "；".join(hard[:3]))
+    # ---------- 与 v1 人设体系的打通 ----------
 
-        summary = "。".join(p for p in parts if p)
-        summary = self.apply_corrections(summary, corrections)
-        if estimate_tokens(summary) > limit:
-            summary = truncate_to_tokens(summary, limit)
-        return summary
+    def v1_persona(self, slug: str) -> Dict[str, Any]:
+        """返回可直接写进 persona.json 的 v1 人设（用于 /恋人配置）"""
+        persona = self.get(slug)
+        if persona is None:
+            return {}
+        return persona.get("v1人设") or _to_v1(persona)
+
+    def push_to_v1(self, slug: str, overwrite: bool = False) -> Dict[str, Any]:
+        """把蒸馏结果写回 v1 的 persona.json，使人设真相源保持唯一
+
+        Args:
+            overwrite: False（默认）只填空——用户手写过的值不动，
+                       亲密尺度/内容边界/对用户的称呼 永远不动。
+        """
+        import sys
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        if str(root) not in sys.path:
+            sys.path.insert(0, str(root))
+        from scripts.manager import LoveCompanionManager
+
+        extracted = self.get(slug)
+        if extracted is None:
+            raise KeyError(f"人格不存在：{slug}")
+        manager = LoveCompanionManager(str(self.data_dir))
+        current = manager.get_persona()
+        merged = _to_v1(extracted, base=current, overwrite=overwrite)
+        merged.pop("_蒸馏", None)          # 内部元信息不写进用户人设
+        return manager.set_persona(merged)
+
+    @staticmethod
+    def from_preset(preset_id: int) -> Dict[str, Any]:
+        """取一套 v1 预设作为蒸馏基底（预设 → 素材校准，而不是二选一）"""
+        import sys
+        from pathlib import Path
+
+        root = Path(__file__).resolve().parents[2]
+        if str(root) not in sys.path:
+            sys.path.insert(0, str(root))
+        from scripts.manager import LoveCompanionManager
+        preset = LoveCompanionManager().load_preset(preset_id)
+        return preset or {}
 
     # ---------- 导出 ----------
 

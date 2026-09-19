@@ -23,6 +23,62 @@ from scripts.pipeline.injector import estimate_tokens, truncate_to_tokens
 _EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF\U0001F000-\U0001F2FF"
                        "\U00002600-\U000027BF\U0001F1E6-\U0001F1FF]")
 
+# 依恋差异化（方案 4.3 明确要求，love-companion 定制，非参考项目概念）
+#   焦虑型 → 给确定性：说清"我在、什么时候、会怎样"，避免模糊与留白
+#   回避型 → 给空间：不追问、不要求回应，来了就聊，不来不催
+#   安全型 → 自然陪伴：平等轻松地聊，不用刻意安抚
+#   恐惧型 → 既给确定性又给退路：先表态，再明确说"你可以不回"
+ATTACHMENT_TWEAK: Dict[str, Dict[str, Any]] = {
+    "焦虑型": {
+        "后缀": ["我在，看到就回你。", "不是客气，是真的在。"],
+        "禁忌": ["？", "在吗"],        # 开放式追问会放大焦虑
+        "语气": "确定",
+    },
+    "回避型": {
+        "后缀": ["不用回我，就是想让你知道。", "忙你的，回头再说。"],
+        "禁忌": ["为什么不", "怎么不回"],   # 追问与质问会让回避型更退
+        "语气": "留白",
+    },
+    "安全型": {
+        "后缀": ["回头聊。", "先这样~"],
+        "禁忌": [],
+        "语气": "自然",
+    },
+    "恐惧型": {
+        "后缀": ["我在，但你不用马上回。", "想说的时候再说，不急。"],
+        "禁忌": ["为什么不", "你应该"],
+        "语气": "确定+留退路",
+    },
+    "未知": {"后缀": [], "禁忌": [], "语气": "自然"},
+}
+
+
+def attachment_of(data_dir: Optional[str] = None) -> str:
+    """读用户画像里的依恋类型（读不到就当未知，不打断关怀）"""
+    try:
+        from scripts.user.profile import UserProfileStore
+        att = (UserProfileStore(data_dir).get().get("依恋类型") or {}).get("判断")
+        return att if att in ATTACHMENT_TWEAK else "未知"
+    except Exception:  # noqa: BLE001
+        return "未知"
+
+
+def apply_attachment(text: str, attachment: str, seed: int = 0) -> str:
+    """按依恋类型改写关怀话术
+
+    - 去掉该类型的禁忌说法
+    - 焦虑型/恐惧型补一句确定性后缀；回避型补一句"不用回"
+    """
+    tweak = ATTACHMENT_TWEAK.get(attachment) or ATTACHMENT_TWEAK["未知"]
+    out = text or ""
+    for bad in tweak["禁忌"] or []:
+        out = out.replace(bad, "。").replace("。。", "。").strip("。")
+    tails = tweak["后缀"] or []
+    if tails:
+        out = out.rstrip("。") + "。" + tails[seed % len(tails)]
+    return re.sub(r"。{2,}", "。", out).strip()
+
+
 # 各关怀类型的话术模板。{nick} 称呼 / {detail} 具体事实 / {topic} 她关心的事
 TEMPLATES: Dict[str, List[str]] = {
     "低落陪伴": [
@@ -98,20 +154,25 @@ def apply_voice(text: str, voice: Optional[Dict[str, Any]], nickname: str = "") 
 def render(kind: str, nickname: str = "", detail: str = "",
            voice: Optional[Dict[str, Any]] = None,
            corrections: Optional[List[Dict[str, str]]] = None,
-           length_pref: str = "", budget: Optional[int] = None) -> str:
+           length_pref: str = "", budget: Optional[int] = None,
+           attachment: str = "", seed: Optional[int] = None) -> str:
     """渲染一条关怀话术
 
     Args:
         kind: 低落陪伴 / 纪念日 / 深夜晚安 / 久未联系
-        nickname: 对用户的称呼
+        nickname: 对用户的称呼（v1 人设的「对用户的称呼」，不是 ta 的名字）
         detail: 具体事实（来自记忆），没有就用兜底
         voice: 伴侣人格的声线层（library.get(slug)["声线"]）
         corrections: 纠偏规则（library.corrections(slug)）
         length_pref: 用户回复长度偏好，"短" 时只保留第一句
         budget: Token 预算，默认取注入预算表里的「关怀话术」
+        attachment: 依恋类型（焦虑型/回避型/安全型/恐惧型），空则不做差异化
+        seed: 模板与后缀的选取种子，不传按日期取（同一天稳定）
     """
     limit = int(budget if budget is not None
                 else schema.DEFAULT_INJECTION_BUDGET["关怀话术"])
+    if seed is None:
+        seed = datetime.now().day
 
     template = pick_template(kind)
     nick = nickname or ""
@@ -124,13 +185,18 @@ def render(kind: str, nickname: str = "", detail: str = "",
 
     text = apply_voice(text, voice, nick)
 
-    if corrections:
-        from scripts.persona.library import PersonaLibrary
-        text = PersonaLibrary().apply_corrections(text, corrections)
-
+    # 先按长度偏好截断，再补依恋后缀——否则后缀会被一起截掉，
+    # 而「我在，看到就回你」恰恰是焦虑型最需要的那句
     if length_pref == "短":
         head = re.split(r"[。！？!?\n]", text)
         text = (head[0] + "。") if head and head[0] else text
+
+    if attachment:
+        text = apply_attachment(text, attachment, seed)
+
+    if corrections:
+        from scripts.persona.library import PersonaLibrary
+        text = PersonaLibrary().apply_corrections(text, corrections)
 
     if estimate_tokens(text) > limit:
         text = truncate_to_tokens(text, limit)
@@ -154,10 +220,18 @@ def compose(kind: str, slug: str, data_dir: Optional[str] = None,
 
     user = UserProfileStore(data_dir).get() or {}
     length_pref = (user.get("互动偏好") or {}).get("回复长度偏好") or ""
-    nickname = persona.get("昵称") or persona.get("姓名") or ""
+    # 称呼取 v1 人设里「对用户的称呼」（ta 怎么叫你），没有才退回 ta 的名字
+    v1 = persona.get("v1人设") or {}
+    nickname = (v1.get("对用户的称呼") or v1.get("昵称")
+                or persona.get("昵称") or persona.get("姓名") or "")
+
+    attachment = (user.get("依恋类型") or {}).get("判断") or ""
+    if attachment not in ATTACHMENT_TWEAK:
+        attachment = "未知"
 
     text = render(kind, nickname=nickname, detail=detail, voice=voice,
-                  corrections=corrections, length_pref=length_pref, budget=budget)
+                  corrections=corrections, length_pref=length_pref,
+                  budget=budget, attachment=attachment)
     return {
         "kind": kind,
         "text": text,
@@ -165,6 +239,7 @@ def compose(kind: str, slug: str, data_dir: Optional[str] = None,
         "budget": int(budget if budget is not None
                       else schema.DEFAULT_INJECTION_BUDGET["关怀话术"]),
         "used_detail": detail or FALLBACK_DETAIL.get(kind, ""),
+        "attachment": attachment,
     }
 
 
