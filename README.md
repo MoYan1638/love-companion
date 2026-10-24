@@ -4,7 +4,7 @@
 
 **给任何AI装上恋人模式 · 8种人设一键切换 · 开源免费**
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/deed.zh)
 [![Version](https://img.shields.io/badge/Version-2.0.0-ff69b4)]()
 [![Skill Type](https://img.shields.io/badge/Type-AI%20Skill-blueviolet)]()
 [![Presets](https://img.shields.io/badge/Presets-8-pink)]()
@@ -117,7 +117,7 @@ git clone https://github.com/MoYan1638/love-companion.git
 love-companion/
 ├── 📄 SKILL.md              # 技能主文件（核心逻辑与架构）
 ├── 📄 README.md             # 项目说明（你正在看）
-├── 📄 LICENSE               # MIT 许可证
+├── 📄 LICENSE               # CC BY-NC 4.0 许可证
 ├── 📁 scripts/
 │   ├── 🐍 manager.py        # v1 配置与记忆管理（全部保留，向后兼容）
 │   ├── 📁 core/             # schema · 设置读取 · 数据可靠性 · 隐私脱敏 · 内容边界
@@ -299,7 +299,7 @@ python -m unittest discover -s tests -t .
 - 本项目为 **AI 角色扮演工具**，所有对话均为 AI 生成，**不代表真实人际关系**。
 - 请勿将 AI 陪伴**替代真实社交**或**专业心理辅导**。
 - 如您正在经历心理健康困扰，请寻求专业帮助。
-- 本项目遵循 MIT 许可证，使用者需自行承担使用风险。
+- 本项目遵循 CC BY-NC 4.0 许可证，使用者需自行承担使用风险。
 
 ---
 
@@ -331,7 +331,7 @@ python -m unittest discover -s tests -t .
 
 ## 📄 许可证
 
-[MIT License](LICENSE) — 自由使用、修改、分发，署名即可。
+[CC BY-NC 4.0](LICENSE) — 个人学习、使用、修改、二次创作免费，需署名并附原仓库链接；**禁止商业用途（含倒卖、打包进付费产品/服务）**，商用授权请联系作者。
 
 ---
 
