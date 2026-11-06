@@ -34,7 +34,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": ">=4",
-    "@deepseek-ai/dsh-tools": ">=0.1.2-alpha.1"
+    "@deepseek-ai/dsh-tools": ">=0.1.2-alpha.1 || >=0.1.5-alpha.1 || >=0.1.7-alpha.1 || >=0.2.0-0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": { "optional": true },
