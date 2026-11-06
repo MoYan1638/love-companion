@@ -53,6 +53,15 @@ PATTERNS: List[tuple] = [
 MIN_CONTENT_LEN = 2
 STOPWORDS = ("什么", "怎么", "为什么", "吗")
 
+# v2.1 新增：口语过渡语误捕黑名单——
+# 「我是说今天不去」不是自我介绍，「我在想晚饭吃啥」不是住址，
+# 命中这些开头的一律不采（真实性零容忍：宁可漏记不可误记）
+FALSE_POSITIVE_PREFIXES = (
+    "我是说", "我是想", "我是觉得", "我是不是",
+    "我在想", "我在做", "我在看", "我在写",
+    "我叫它", "我叫他", "我叫她",
+)
+
 
 def _clean(text: str) -> str:
     return (text or "").strip(" ，,。.、；;！!？?~ ").strip()
@@ -85,6 +94,8 @@ def extract_memories(text: str, conversation_id: str = "") -> List[Dict[str, Any
             if len(content) < MIN_CONTENT_LEN or content in seen:
                 continue
             if any(sw in content for sw in STOPWORDS):
+                continue
+            if any(content.startswith(p) for p in FALSE_POSITIVE_PREFIXES):
                 continue
             if has_sensitive(content):
                 continue

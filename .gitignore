@@ -2,3 +2,14 @@ __pycache__/
 *.py[cod]
 *.json.bad-*
 *.tmp
+
+# 发布临时脚本（含 API Key，勿提交）
+_xp_put.mjs
+_xp_upload.mjs
+_xpfetch.mjs
+_zip.mjs
+
+# 发布产物
+promo/dist/
+promo/logo/_draft/
+promo/logo/_make_*.py

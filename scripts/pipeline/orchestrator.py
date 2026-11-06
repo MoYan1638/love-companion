@@ -75,6 +75,25 @@ class Session:
         """
         # 预算真读 settings.json：用户在「控制与安全感」里调过的额度会生效
         caps = core_settings.budget_map(self.data_dir)
+
+        # 合规闸门（v2.1）：《人工智能拟人化互动服务管理暂行办法》禁止向未成年人
+        # 提供虚拟伴侣等虚拟亲密关系服务。未确认「已满 18 周岁」时不注入任何
+        # 恋人上下文，只返回合规提示，由 Agent 先完成年龄确认。
+        if not core_settings.age_confirmed(self.data_dir):
+            notice = (
+                "【合规提示】Love Companion 为 AI 角色扮演 / 虚拟伴侣类服务，"
+                "依据《人工智能拟人化互动服务管理暂行办法》，不得向未成年人提供。"
+                "请先向用户确认其已年满 18 周岁；用户确认后，在 settings.json 的"
+                "「合规.已满18周岁确认」置为 true 方可启用恋人模式。"
+                "本轮未注入人格、记忆等任何恋人上下文。"
+            )
+            return {
+                "sections": {}, "render": notice, "tokens": {},
+                "total_tokens": 0, "budget": int(caps["合计上限"]),
+                "truncated": [], "dropped": [], "evidence": {},
+                "memory_ids": [], "age_gate": True,
+            }
+
         inj = Injector(total_budget=int(caps["合计上限"]), caps=caps)
         memory_ids: List[int] = []
 
@@ -188,6 +207,12 @@ class Session:
             try:
                 from scripts.style.humanizer import scan
                 report["humanizer"] = scan(reply or "")
+            except Exception:  # noqa: BLE001
+                pass
+            # 密度校准（M4.5）：结构腔「超了压」+ 微标记「少了补」，软校准层
+            try:
+                from scripts.style.density import assess
+                report["density"] = assess(reply or "")
             except Exception:  # noqa: BLE001
                 pass
 

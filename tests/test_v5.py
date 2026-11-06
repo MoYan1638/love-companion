@@ -222,7 +222,9 @@ class TestImagePlanner(TempDataMixin):
         self.assertTrue(self.planner.gate()["ok"])
 
     def test_style_from_mood(self):
-        night_style = self.planner.style_for({}, "开心")
+        # 指定白天时刻：不传 now 会取当前时间，深夜跑测试会触发夜间 override 导致误报
+        day = datetime.now().replace(hour=10)
+        night_style = self.planner.style_for({}, "开心", day)
         self.assertIn("色调", night_style)
         self.assertIn("构图", night_style)
         self.assertIn("元素", night_style)

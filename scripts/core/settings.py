@@ -96,6 +96,16 @@ def collection_enabled(data_dir: Optional[str] = None) -> bool:
     return bool(load(data_dir).get("隐私", {}).get("采集开关", True))
 
 
+def age_confirmed(data_dir: Optional[str] = None) -> bool:
+    """合规闸门：用户是否已确认年满 18 周岁
+
+    默认未确认。依据《人工智能拟人化互动服务管理暂行办法》，
+    虚拟伴侣等虚拟亲密关系服务不得向未成年人提供——未确认前
+    orchestrator.Session.prepare() 不注入任何人设与记忆。
+    """
+    return bool(load(data_dir).get("合规", {}).get("已满18周岁确认", False))
+
+
 if __name__ == "__main__":
     import json
     import tempfile

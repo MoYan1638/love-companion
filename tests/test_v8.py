@@ -42,6 +42,9 @@ class TempDataMixin(unittest.TestCase):
         self._old = os.environ.get("LOVE_COMPANION_DATA_DIR")
         self.tmp = tempfile.mkdtemp(prefix="lc_v8_")
         self.data_dir = self.tmp
+        # 合规闸门默认未确认；测试环境统一视为已确认成年人
+        Path(self.tmp, "settings.json").write_text(
+            json.dumps({"合规": {"已满18周岁确认": True}}), encoding="utf-8")
 
     def tearDown(self):
         if self._old is None:
@@ -120,7 +123,8 @@ class TestSettingsTakeEffect(TempDataMixin):
             m["created_at"] = "2026-06-01T00:00:00"
         st._save(memories)
         Path(self.data_dir, "settings.json").write_text(
-            json.dumps({"衰减参数": {"half_life_days": 365}}), encoding="utf-8")
+            json.dumps({"衰减参数": {"half_life_days": 365},
+                        "合规": {"已满18周岁确认": True}}), encoding="utf-8")
         st.decay(now=datetime(2026, 9, 20))
         imp = st.all()[0]["importance"]
         # 半衰期 365 天时 100 天只衰减到 ~0.83；若还是常量 30 天会掉到 ~0.1
@@ -128,14 +132,16 @@ class TestSettingsTakeEffect(TempDataMixin):
 
     def test_injection_budget_from_settings(self):
         Path(self.data_dir, "settings.json").write_text(
-            json.dumps({"注入预算": {"合计上限": 100}}), encoding="utf-8")
+            json.dumps({"注入预算": {"合计上限": 100},
+                        "合规": {"已满18周岁确认": True}}), encoding="utf-8")
         pre = Session(data_dir=self.data_dir, slug="").prepare("你好" * 200)
         self.assertLessEqual(pre["total_tokens"], 100,
                              f"settings 里的总预算没生效：{pre['total_tokens']}")
 
     def test_collection_switch_off(self):
         Path(self.data_dir, "settings.json").write_text(
-            json.dumps({"隐私": {"采集开关": False}}), encoding="utf-8")
+            json.dumps({"隐私": {"采集开关": False},
+                        "合规": {"已满18周岁确认": True}}), encoding="utf-8")
         from scripts.pipeline.queue import TaskQueue
         from scripts.pipeline.runner import run_idle
         TaskQueue(self.data_dir).enqueue("memory.extract", {"text": "我喜欢三分糖"})
@@ -143,6 +149,25 @@ class TestSettingsTakeEffect(TempDataMixin):
         self.assertEqual(report["done"], 1)
         self.assertEqual(MemoryStore(self.data_dir).all(), [],
                          "采集开关关闭后不应写入任何记忆")
+
+
+class TestAgeGate(TempDataMixin):
+    """合规闸门（v2.1）：未确认年满 18 周岁前不注入任何恋人上下文"""
+
+    def test_unconfirmed_returns_notice_only(self):
+        # 删掉 setUp 预写的确认设置 → 深合并回默认 False
+        (Path(self.data_dir) / "settings.json").unlink()
+        pre = Session(data_dir=self.data_dir, slug="").prepare("今天好累")
+        self.assertTrue(pre.get("age_gate"))
+        self.assertEqual(pre["sections"], {})
+        self.assertEqual(pre["total_tokens"], 0)
+        self.assertIn("18", pre["render"])
+        self.assertNotIn("记忆", pre["sections"])
+
+    def test_confirmed_injects_normally(self):
+        # setUp 已写入已确认，行为应与闸门上线前一致
+        pre = Session(data_dir=self.data_dir, slug="").prepare("今天好累")
+        self.assertFalse(pre.get("age_gate", False))
 
 
 class TestNoDuplicateInLoverCard(unittest.TestCase):

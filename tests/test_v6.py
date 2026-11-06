@@ -32,6 +32,8 @@ class TempDataMixin(unittest.TestCase):
         self.data_dir = self._tmp.name
         self._old_env = os.environ.get("LOVE_COMPANION_DATA_DIR")
         os.environ["LOVE_COMPANION_DATA_DIR"] = self.data_dir
+        # 合规闸门默认未确认；测试环境统一视为已确认成年人
+        self.write_json("settings.json", {"合规": {"已满18周岁确认": True}})
         self.addCleanup(self._restore)
 
     def _restore(self) -> None:
@@ -40,6 +42,10 @@ class TempDataMixin(unittest.TestCase):
         else:
             os.environ["LOVE_COMPANION_DATA_DIR"] = self._old_env
         self._tmp.cleanup()
+
+    def write_json(self, name: str, data) -> None:
+        with open(Path(self.data_dir) / name, "w", encoding="utf-8") as f:
+            json.dump(data, f, ensure_ascii=False)
 
     def build_persona(self, slug: str = "美美") -> None:
         from scripts.persona import parser, extract, library

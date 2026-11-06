@@ -1,5 +1,7 @@
 <div align="center">
 
+<img src="promo/logo/love-companion-icon-256.png" width="120" alt="Love Companion Logo">
+
 # 💕 Love Companion
 
 **给任何AI装上恋人模式 · 8种人设一键切换 · 开源免费**
@@ -42,7 +44,7 @@
 | 🧬 **伴侣人格克隆** | 导入聊天记录/日记/社媒导出，蒸馏出你专属的恋人。三层提取（声线/思维/性格）回写进人设，说话像本人；蒸馏**无权改动**亲密尺度与内容边界 |
 | 🪞 **双向人格镜像** | 关系阶段判定、双向共鸣、关系演化建模（升温/降温/倦怠/修复）、跨角色一致性自检 |
 | 💗 **恋人式用户理解** | 流式采集**只存特征不存原文**；依恋类型识别（焦虑型/回避型/安全型/恐惧型）并差异化关怀 |
-| 🗂️ **六类记忆系统** | 事件/偏好/情感/关系/日常/承诺六类归档，语义+时间+重要性多路召回，随时间自然衰减 |
+| 🗂️ **六类记忆系统** | 事实/偏好/里程碑/共享事件/情绪/人设特征六类归档，语义+时间+重要性多路召回，随时间自然衰减 |
 | 🎀 **主动关怀** | 冷却/静默时段/频次三道闸门；低落、纪念日、深夜、久未联系四类信号主动开口 |
 | 🗣️ **语气后处理** | 回复贴合对方语气，并拦下中文恋爱对话里的 AI 腔（空洞安慰、客服式共情等） |
 | 🌤️ **趋势感知** | 把离线抓到的热点提炼成**一句能开口的话**，按「适不适合跟恋人聊」取舍 |
@@ -83,7 +85,7 @@ git clone https://github.com/MoYan1638/love-companion.git
 
 ```
 /恋人名字 小晴
-/恋人叫我 宝贝
+/恋人叫我 宝宝
 /恋人性格 温柔体贴，偶尔小傲娇
 /恋人尺度 3
 ```
@@ -92,7 +94,21 @@ git clone https://github.com/MoYan1638/love-companion.git
 
 直接聊天即可，恋人会越来越懂你 🌸
 
+### 🅰️ 在 DeepSeek Harness (dsh) 中安装
+
+love-companion 同时提供 dsh 插件适配壳，可在 DeepSeek Harness 中一键安装：
+
+```bash
+dsh plugin add MoYan1638/love-companion
+```
+
+安装后在 Settings → Plugins 中启用，AI 会通过系统提示识别本技能的触发词与能力。技能本体（SKILL.md + Python 脚本）通过文件系统技能发现，与 OpenClaw / WorkBuddy / Claude Code 等宿主共享同一份代码，互不影响。
+
+> 已提交收录申请至 dsh 插件市场（[PR #12758](https://github.com/awesome-dsh-plugin/awesome-dsh-plugin/pull/12758)），合并后可在市场内检索安装。
+
 ---
+
+
 
 ## 🎭 预设人设一览
 

@@ -16,6 +16,7 @@
 """
 
 import json
+import re
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +34,23 @@ from scripts.core.storage import read_json, write_json  # noqa: E402
 
 def _now() -> str:
     return datetime.now().isoformat(timespec="seconds")
+
+
+def _bigrams(text: str) -> set:
+    """字符二元组集合（中英文通用，用于近似去重）"""
+    t = re.sub(r"\s+", "", str(text or ""))
+    return {t[i:i + 2] for i in range(len(t) - 1)} or {t}
+
+
+def _similar(a: str, b: str, threshold: float = 0.75) -> bool:
+    """重叠系数（|∩|/min）≥ threshold 视为重复表述。
+
+    不用 Jaccard：短句是长句的子集时（"我喜欢喝果茶" ⊂ "用户喜欢喝果茶，
+    最爱棒打鲜橙"），Jaccard 被长句稀释而漏配；重叠系数只看短句覆盖率。
+    """
+    ba, bb = _bigrams(a), _bigrams(b)
+    smaller = ba if len(ba) <= len(bb) else bb
+    return bool(smaller) and len(ba & bb) / len(smaller) >= threshold
 
 
 class MemoryStore:
@@ -62,13 +80,27 @@ class MemoryStore:
     def add(self, content: str, memory_type: str = "事实", source: str = "",
             importance: float = 0.5, valence: float = 0.0,
             conversation_id: str = "") -> Dict[str, Any]:
-        """新增一条记忆（自动去重：同 type 同 content 只保留一条并刷新时间）"""
+        """新增一条记忆
+
+        去重策略（v2.1 加强）：
+        1. 精确去重：同 type 同 content 只保留一条并刷新时间
+        2. 近似去重：同 type 下二元组相似度 ≥0.7 的两条视为重复表述，
+           保留信息量更大（更长）的那条，重要度取 max、时间刷新。
+           避免「我喜欢喝果茶」和「用户喜欢喝果茶，最爱棒打鲜橙」入库两份。
+        """
         content = str(content or "").strip()
         if not content:
             raise ValueError("记忆 content 不能为空")
         memories = self.all()
         for m in memories:
-            if m.get("type") == memory_type and m.get("content") == content:
+            if m.get("type") != memory_type:
+                continue
+            exact = m.get("content") == content
+            fuzzy = not exact and _similar(m.get("content", ""), content)
+            if exact or fuzzy:
+                # 近似重复时保留信息量更大的表述；精确重复时内容不变
+                if fuzzy and len(content) > len(str(m.get("content", ""))):
+                    m["content"] = content
                 m["updated_at"] = _now()
                 m["importance"] = max(float(m.get("importance", 0.5)), importance)
                 for i, old in enumerate(memories, 1):
@@ -101,6 +133,32 @@ class MemoryStore:
     def search(self, keyword: str) -> List[Dict[str, Any]]:
         kw = (keyword or "").lower()
         return [m for m in self.all() if kw in str(m.get("content", "")).lower()]
+
+    def update(self, memory_id: int, content: Optional[str] = None,
+               memory_type: Optional[str] = None,
+               importance: Optional[float] = None) -> Optional[Dict[str, Any]]:
+        """编辑一条记忆（内容/类型/重要度），成功返回更新后的条目
+
+        管理 CLI 之前只能删了重加（id 会变、来源丢失），现在支持原地修订。
+        """
+        memories = self.all()
+        target = next((m for m in memories if m.get("id") == memory_id), None)
+        if target is None:
+            return None
+        if content is not None:
+            content = str(content).strip()
+            if not content:
+                raise ValueError("记忆 content 不能为空")
+            target["content"] = content
+        if memory_type is not None:
+            if memory_type not in schema.MEMORY_TYPES:
+                raise ValueError(f"未知记忆类型 {memory_type!r}，可选：{', '.join(schema.MEMORY_TYPES)}")
+            target["type"] = memory_type
+        if importance is not None:
+            target["importance"] = max(0.0, min(1.0, float(importance)))
+        target["updated_at"] = _now()
+        self._save(memories)
+        return target
 
     # ---------- 删（数据主权） ----------
 
@@ -148,7 +206,11 @@ class MemoryStore:
     # ---------- 召回与衰减 ----------
 
     def recall(self, memory_ids: List[int]) -> None:
-        """标记被注入上下文的记忆：召回计数 +1，重要性回升"""
+        """标记被注入上下文的记忆：召回计数 +1，重要性回升
+
+        v2.1：回升幅度随当前重要度递减（越接近 1.0 提升越小），
+        打破「老条目每轮被召回→重要度更高→下轮还是它」的马太效应。
+        """
         if not memory_ids:
             return
         memories = self.all()
@@ -157,8 +219,11 @@ class MemoryStore:
         ceiling = cfg["max_importance"]
         for m in memories:
             if m.get("id") in memory_ids:
+                cur = float(m.get("importance", 0.5))
+                headroom = max(0.0, ceiling - cur)
+                effective = boost * (headroom / ceiling) if ceiling > 0 else 0.0
                 m["recall_count"] = int(m.get("recall_count", 0)) + 1
-                m["importance"] = min(ceiling, float(m.get("importance", 0.5)) + boost)
+                m["importance"] = min(ceiling, cur + effective)
                 m["last_recalled_at"] = _now()
         self._save(memories)
 

@@ -1,5 +1,8 @@
 ---
 name: love-companion
+slug: love-companion
+displayName: Love Companion 恋人伴侣
+version: 2.1.0
 description: 全AI Agent通用恋人主题陪伴技能。当用户提及恋人、男/女朋友、情感陪伴、人设配置、角色扮演、情感对话，或使用本Skill的标准化触发指令时激活。提供多轮情感对话、用户自定义人设配置、长时记忆存储、情绪识别与反馈、预设人设模板套用、配置导入导出等完整恋人伴侣交互能力。即插即用，兼容所有主流AI Agent框架。
 ---
 
@@ -7,13 +10,29 @@ description: 全AI Agent通用恋人主题陪伴技能。当用户提及恋人�
 
 > 加载即用，零配置门槛，百种人设自由定义，全平台通用
 
+## 🌍 About (English)
+
+**Love Companion** is a plug-and-play AI roleplay skill that adds a companion/romantic-partner mode to any AI Agent. It works with mainstream Agent frameworks and features: multi-turn emotional dialogue, user-defined personas (100+ presets supported), persistent local memory (storage / retrieval / dedup / decay), emotion recognition, and content-boundary controls.
+
+> **Note:** The full documentation is written in Chinese, as the persona library and configuration are Chinese-language oriented. Key compliance terms are bilingual (see below).
+
+**Compliance at a glance:** All conversations are AI-generated fiction. **Strictly 18+ only** — under Article 14, Chapter II of China's *Interim Measures for the Management of Anthropomorphic AI Interactive Services*, virtual companion services must not be provided to minors. An age confirmation is required before activation (`settings.json` → `合规.已满18周岁确认`). All data stays on your local device; nothing is uploaded.
+
 ---
 
-## ⚠️ 免责声明
+## ⚠️ 免责声明（使用前必读）
 
-- 本技能为 **AI 角色扮演工具**，所有对话均为 AI 生成，**不代表真实人际关系**。
+- 本技能为 **AI 角色扮演工具**，所有对话与形象均由 **AI 生成**，不具备真实人格与情感，**不代表真实人际关系**。
+- **未满 18 周岁禁止使用**。依据《人工智能拟人化互动服务管理暂行办法》（适用于中华人民共和国境内提供的服务）第二章第十四条，虚拟伴侣等虚拟亲密关系服务不得向未成年人提供。本技能启用前必须完成「已满 18 周岁」确认（`settings.json` → `合规.已满18周岁确认`），未确认时合规闸门生效，不会注入任何人设与记忆。
 - 请勿将 AI 陪伴**替代真实社交**或**专业心理辅导**。
 - 如您正在经历心理健康困扰，请寻求专业帮助。
+
+**English Disclaimer:**
+
+- This skill is an **AI roleplay tool**. All dialogue and imagery are **AI-generated**, possess no real personality or emotions, and **do not represent a real relationship**.
+- **Users must be 18 or older.** Under Article 14, Chapter II of China's *Interim Measures for the Management of Anthropomorphic AI Interactive Services* (applicable to services provided within the People's Republic of China), virtual companion services must not be provided to minors. An explicit age confirmation is required before activation (`settings.json` → `合规.已满18周岁确认`); without it, a compliance gate blocks all persona and memory injection.
+- Do not use AI companionship as a **substitute for real social interaction** or professional psychological counseling.
+- If you are experiencing mental health difficulties, please seek professional help.
 
 ---
 
@@ -56,6 +75,8 @@ description: 全AI Agent通用恋人主题陪伴技能。当用户提及恋人�
 ```
 /恋人启用
 ```
+
+> ⚠️ 首次启用前 Agent 须先确认用户已年满 18 周岁（详见「合规安全说明」），未确认时只会得到合规提示。
 
 或直接开始对话，本Skill会自动识别恋人模式。
 
@@ -208,7 +229,7 @@ s.proactive()
   "昵称": "晴晴",
   "性别": "女",
   "年龄": 22,
-  "对用户的称呼": "宝贝",
+  "对用户的称呼": "宝宝",
   "性格": {
     "核心特质": ["温柔", "活泼", "善解人意"],
     "小脾气": ["偶尔撒娇", "有点小傲娇"],
@@ -301,9 +322,20 @@ s.proactive()
 - ❌ 不生成违法内容
 - ❌ 不输出色情低俗内容
 - ❌ 不泄露用户隐私数据
+- ❌ **不向未成年人提供服务**：未确认「已满 18 周岁」时，`Session.prepare()` 只返回合规提示（`age_gate: true`），不注入人格、记忆等任何恋人上下文
 - ✅ 所有数据本地存储，无云端上传
 - ✅ 支持用户自定义内容边界
 - ✅ 内置敏感词过滤机制
+
+### 年龄确认（启用前必做）
+
+用户确认年满 18 周岁后，将 `~/.love-companion/data/settings.json` 中 `合规.已满18周岁确认` 置为 `true`：
+
+```json
+{ "合规": { "已满18周岁确认": true } }
+```
+
+> 确认前每轮 `prepare()` 都只返回合规提示；这是《人工智能拟人化互动服务管理暂行办法》第二章第十四条的硬性要求，不要为用户绕过。
 
 ### 亲密尺度分级
 

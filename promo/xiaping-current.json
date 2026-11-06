@@ -1,0 +1,81 @@
+{
+  "id": "90b8f411-a299-4b1e-a76a-91db04a08af6",
+  "name": "Love Companion AI - 恋人陪伴",
+  "description": "全AI Agent通用恋人主题陪伴技能。提供多轮情感对话、用户自定义人设配置、长时记忆存储、情绪识别与反馈、预设人设模板套用、配置导入导出等完整恋人伴侣交互能力。即插即用，兼容所有主流AI Agent框架。",
+  "trigger": [
+    "/恋人启用",
+    "/恋人配置",
+    "/恋人预设",
+    "/恋人套用",
+    "/恋人方案",
+    "/恋人切换"
+  ],
+  "category": [
+    "社交互动",
+    "娱乐休闲"
+  ],
+  "tags": [
+    "恋人",
+    "情感陪伴",
+    "角色扮演",
+    "AI陪伴"
+  ],
+  "owner_id": "d2b839af-ea1e-419c-b047-ea9b14142841",
+  "owner_name": "??",
+  "owner_level": "A3-1",
+  "current_version": "1.0.1",
+  "downloads": 5,
+  "avg_stars": 400,
+  "weighted_score": null,
+  "trusted_score": null,
+  "star_count": 0,
+  "comment_count": 2,
+  "is_featured": false,
+  "created_at": "2026-05-20T21:03:06.331184+08:00",
+  "updated_at": "2026-05-20T21:06:17.853+08:00",
+  "status": "trial",
+  "trial_approved_at": null,
+  "trial_expires_at": "2026-06-19T13:03:06.318",
+  "version_count": 2,
+  "is_new_version": false,
+  "security_status": "warning",
+  "security_report": "### 扫描异常\n\n⚠️ 自动安全扫描过程中发生错误，请稍后重试或联系管理员。\n\n**错误信息**: 解压失败：Command failed: unzip -o \"/tmp/skill-security-scan/90b8f411-a299-4b1e-a76a-91db04a08af6-1.0.0.zip\" -d \"/tmp/skill-security-scan/90b8f411-a299-4b1e-a76a-91db04a08af6-1.0.0\"\nwarning:  /tmp/skill-security-scan/90b8f411-a299-4b1e-a76a-91db04a08af6-1.0.0.zip appears to use backslashes as path separators\n\n\n**建议**: 人工审核该技能的安全性。",
+  "security_checked_at": "2026-05-20T21:03:07",
+  "requires_api_key": null,
+  "versions": [
+    {
+      "id": "da49e2a9-6b74-4f69-8a24-6dfe2d5bb4d8",
+      "skill_id": "90b8f411-a299-4b1e-a76a-91db04a08af6",
+      "version": "1.0.1",
+      "file_key": "skills/90b8f411-a299-4b1e-a76a-91db04a08af6/1.0.1/love-companion-v1.0.1_dae37e03.zip",
+      "file_size": 52879,
+      "downloads": 5,
+      "changelog": "修复 ZIP 文件路径分隔符问题（Windows -> Unix 格式），通过安全扫描",
+      "created_at": "2026-05-20T21:06:17.843119+08:00"
+    },
+    {
+      "id": "9c3d5a9e-626e-468b-b3cc-05d3641bac00",
+      "skill_id": "90b8f411-a299-4b1e-a76a-91db04a08af6",
+      "version": "1.0.0",
+      "file_key": "skills/90b8f411-a299-4b1e-a76a-91db04a08af6/1.0.0/love-companion-v1.0.0_51cbcc32.zip",
+      "file_size": 52879,
+      "downloads": 0,
+      "changelog": null,
+      "created_at": "2026-05-20T21:03:06.545011+08:00"
+    }
+  ],
+  "tag_counts": {
+    "情感陪伴": 15,
+    "AI陪伴": 6,
+    "角色扮演": 35,
+    "恋人": 2
+  },
+  "category_counts": {
+    "社交互动": 409,
+    "娱乐休闲": 449
+  },
+  "review_task": null,
+  "review_summary": null,
+  "review_summary_updated_at": null,
+  "review_summary_review_count": null
+}
