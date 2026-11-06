@@ -1,0 +1,43 @@
+{
+  "name": "love-companion",
+  "version": "2.1.0",
+  "description": "AI 陪伴技能：人设配置、长时记忆、情绪识别与反馈、多轮情感对话",
+  "type": "module",
+  "main": "dsh/index.js",
+  "exports": {
+    ".": "./dsh/index.js",
+    "./dsh": "./dsh/index.js",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "keywords": [
+    "companion",
+    "roleplay",
+    "persona",
+    "memory",
+    "emotion",
+    "skill",
+    "dsh",
+    "deepseek-harness",
+    "cordis"
+  ],
+  "author": "MoYan1638",
+  "license": "CC-BY-NC-4.0",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MoYan1638/love-companion.git"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": ">=4",
+    "@deepseek-ai/dsh-tools": ">=0.1.2-alpha.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": { "optional": true },
+    "@deepseek-ai/dsh-tools": { "optional": true }
+  }
+}

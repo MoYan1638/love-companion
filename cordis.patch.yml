@@ -1,0 +1,8 @@
+# (c) 2026 MoYan1638
+# https://github.com/MoYan1638/love-companion
+# Licensed under the CC BY-NC 4.0 License. See the LICENSE file for details.
+
+# dsh bundle layer: AI 陪伴技能 (love-companion, host)
+- insert:
+    - id: love-companion
+      name: love-companion
