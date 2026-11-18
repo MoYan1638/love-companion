@@ -362,7 +362,7 @@ AI 最大的毛病不是说得难听，是**永远在填满**。真人对话里�
    - `style/humanizer.py` — 这一条像不像 AI 写的
    - `style/density.py` — 用词密度像不像真人
    - `style/dialogue.py` — 这几条连起来像不像两个人在说话（`check_reply()`）
-   - `style/typography.py` — 外形：断句标点清掉了没（第 6 条）、单条超没超 40 字（第 8 条）
+   - `style/typography.py` — 外形：断句标点清掉了没（第 6 条）、单条超没超十二字（第 8 条）
 
    四道全过之后，再用 `typography.format_reply()` 出最终要发的消息列表——
    **别自己手拼**，手拼一定会漏一个句号。

@@ -154,6 +154,21 @@ class VoiceTests(unittest.TestCase):
     def test_empty_input(self):
         self.assertEqual(shape("", level="深度"), [])
 
+    def test_shape_output_has_no_break_punct(self):
+        """声线层拆完就是「要发出去的短句」，逗号句号不能留在段尾（第 6 条）"""
+        text = "今天辛苦啦，我听你说项目很紧，先别硬撑，喝口热水，早点休息，我在这儿陪着你。"
+        for level in ("轻柔", "标准", "深度"):
+            for p in shape(text, level=level, nickname="宝贝"):
+                bad = [ch for ch in p if ch in "。，、；：！？,.;:!?"]
+                self.assertEqual(bad, [], f"{level}: {p}")
+
+    def test_shape_lines_stay_short(self):
+        """一条十来字（第 8 条）：碎碎念是多条短句，不是一条长句"""
+        text = "今天辛苦啦，我听你说项目很紧，先别硬撑，喝口热水，早点休息，我在这儿陪着你。"
+        for level in ("轻柔", "标准", "深度"):
+            for p in shape(text, level=level, nickname="宝贝"):
+                self.assertLessEqual(len(p), 16, f"{level}: {p}")
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -2,7 +2,7 @@
 
 > 依据：《LoveCompanion_开发与优化交接方案》（内部文档，未随仓库发布）
 > 里程碑拆解见 `../love-companion-v2-里程碑拆解.md`（开发者工作区文档，不在本仓库内）
-> 状态：**M0–M8 全部实现**（2026-09，v2.5.1 迭代中）。411 项回归测试全绿，主分支 `main`。
+> 状态：**M0–M8 全部实现**（2026-09，v2.5.2 迭代中）。427 项回归测试全绿，主分支 `main`。
 
 ## 实施记录（一句话）
 
@@ -24,7 +24,9 @@ v1 的 8 套人设、`/恋人…` 指令、manager.py API、数据目录全部�
 | 判断层知识库 | 「对方为什么这样、这时该怎么接、什么时候该闭嘴」——判对不对，不判像不像 | `references/knowledge/` |
 | 军师模式 | 「这句怎么回 / 要不要继续」——顾问口吻，与扮演互斥，默认关闭 | `references/strategy/` |
 | 回复十条 | 发之前的通用规矩：先接情绪、接住上一句、说人话、控篇幅、不施压 | `references/reply-rules.md` |
-| 排版成型 | 去掉断句标点用空格隔开、超长按字数断条——外形像打字不像写作文 | `scripts/style/typography.py` |
+| 排版成型 | 去掉断句标点用空格隔开、超十二字断条——外形像打字不像写作文 | `scripts/style/typography.py` |
+| 篇幅按「一句」算 | 「控篇幅」不是少说话，是一句话别长：一条十字顶天，说得多就多发几条；碎碎念 = 条数多、句子短 | `scripts/style/typography.py`（12 字）+ `care/templates.py::split_messages`（只在空格处断） |
+| 短回应留一个句号 | 「哦哦。」「嗯嗯。」末尾那个句号是语气不是作文感；默认不加，且只认「三字以内 + 单个末尾句号」 | `scripts/style/typography.py::_SHORT_STOP` |
 | 标点收口 | 模板/后缀/口头禅/拆句各补各的标点必然漏，统一在 `_tidy()` 收；其余三层不生产断句标点 | `scripts/care/templates.py` + `scripts/style/` |
 | 极简注入 | 「能不注入就不注入」的分级预算阶梯 | `scripts/pipeline/injector.py` |
 
@@ -111,7 +113,7 @@ love-companion/
 ├── SKILL.md                  # 技能主文件（v1 指令体系 + v2 轻注入策略）
 ├── README.md
 ├── LICENSE
-├── package.json              # 版本真相源（2.5.1）+ dsh bundle 声明
+├── package.json              # 版本真相源（2.5.2）+ dsh bundle 声明
 ├── cordis.patch.yml          # dsh bundle 补丁层
 ├── dsh/
 │   └── index.js              # DSH 插件桥接：系统提示注入 + settings 命名空间（可选加载）
@@ -122,7 +124,7 @@ love-companion/
 │   └── strategy/             # 军师模式（v2.4，可选默认关闭，顾问口吻与扮演互斥）
 ├── docs/
 │   └── architecture.md       # 本文件
-├── tests/                    # 411 项回归，全部走 unittest（零依赖）
+├── tests/                    # 427 项回归，全部走 unittest（零依赖）
 │   ├── test_manager.py       # v1 能力 + v2 schema/迁移
 │   ├── test_v2.py            # M1 + M2
 │   ├── test_v3.py            # M3b + M4
@@ -136,7 +138,7 @@ love-companion/
 │   ├── test_care_stitching.py# 关怀话术拼接
 │   ├── test_knowledge.py     # 知识库结构、索引与合规
 │   ├── test_strategy.py      # 军师模式边界
-│   ├── test_typography.py    # 排版层：去断句标点 / 按字数断条
+│   ├── test_typography.py    # 排版层：去断句标点 / 一条十二字断条 / 短回应句号
 │   └── test_release.py       # 许可证 / Windows 控制台 / 文档一致性（发布门禁）
 └── scripts/
     ├── manager.py            # v1 配置与记忆管理（保留，向后兼容）
@@ -266,7 +268,7 @@ python -m unittest discover -s tests -t .
 | `test_density.py` | 密度校准：结构腔超了压、微标记少了补、恋人专项层、与硬红线互不干扰 |
 | `test_knowledge.py` | 知识库结构与索引完整、单份体量上限、三条硬规矩在文、危机文件不写具体热线号 |
 | `test_strategy.py` | 军师模式：默认关闭、与人设互斥、文档里的边界不能删 |
-| `test_typography.py` | 排版层：只去断句标点、语气零件（省略号/括号/引号）必须留、断条不丢字、默认开关与设置覆盖 |
+| `test_typography.py` | 排版层：只去断句标点、语气零件（省略号/括号/引号）必须留、断条不丢字、硬切均分、短回应句号只认三字以内单句号、默认开关与设置覆盖 |
 | `test_release.py` | 发布门禁：许可证一致、GBK 控制台不崩、版本号/合规声明/指令手册/测试数量四处不打架 + 标本与第 6 条同口径 |
 
 全程使用临时数据目录，不触碰用户真实数据。

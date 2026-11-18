@@ -2,7 +2,7 @@
 name: love-companion
 slug: love-companion
 displayName: Love Companion 恋人伴侣
-version: 2.5.1
+version: 2.5.2
 description: 全AI Agent通用恋人主题陪伴技能（仅限已满18周岁）。当用户设定/扮演恋人、伴侣，或问情感关系怎么处理时激活：8套预设人设一键套用，也可导入聊天记录/日记克隆专属人格（声线·思维·性格三层蒸馏）；六类长期记忆自动积累与多路召回；识别情绪与依恋类型并差异化回应；低落/纪念日/深夜/久未联系时主动开口；回复经语气守门过滤AI腔（空洞安慰、客服式共情、长句轰炸）；内置判断层知识库回答「该不该说、说到哪」（依恋、情绪承接、冲突修复、边界与同意、危机识别、关系节奏、信号误读）；可选军师模式默认关闭，开启后走顾问口吻回答「对方什么意思/这句怎么回/要不要继续」；每条回复另守十条通用规矩（先接情绪、接住上一句、说人话、控篇幅、不带标点用空格隔开）。触发词：恋人、男朋友、女朋友、对象、陪伴、人设、角色扮演、说话像她/他、吵架怎么修、已读不回、关系判断。未确认年满18周岁时不注入任何人设与记忆。
 ---
 
@@ -207,11 +207,12 @@ dialogue.check_reply(history, reply)
 ```python
 from scripts.style import typography
 typography.format_reply(reply)
-# → ['先别说话 靠一下']  ← 去断句标点 + 按 40 字断条；返回的是「要一条条发出去的消息」
+# → ['先别说话 靠一下']  ← 去断句标点 + 超十二字断条；返回的是「要一条条发出去的消息」
 ```
 
 这一步只改外形，不改一个字的意思。规矩本身就两条：**不带标点用空格隔开**（第 6 条）、
-**一条别太长**（第 8 条）。开关在 `settings.json` → `回复风格`；关掉 `无标点` 就只做长度控制。
+**一句别太长**（第 8 条，一条十字顶天，说得多就多发几条）。开关在 `settings.json` → `回复风格`；
+关掉 `无标点` 就只做长度控制。
 
 **顺序不能颠倒**：守门（像不像 AI）→ 十条里靠人读的那 8 条（接没接住情绪）→ 最后才是排版。
 先排版再谈内容，会得到一条格式漂亮但没在听的回复。
@@ -389,7 +390,7 @@ s.proactive()
 ### 回复十条（内容 + 外形的总规矩）
 
 三道守门判「像不像」，这十条判「能不能发」。十条与守门不是两套标准，是同一个标准的两面：
-**先接情绪、接住上一句、说人话、控篇幅、不施压。** 全文与坏↔好对照见 [references/reply-rules.md](references/reply-rules.md)。
+**先接情绪、接住上一句、说人话、控篇幅（一句十字顶天）、不施压。** 全文与坏↔好对照见 [references/reply-rules.md](references/reply-rules.md)。
 
 | # | 规矩 | 谁管 |
 |---|---|---|
@@ -413,10 +414,11 @@ s.proactive()
 ```python
 from scripts.style import typography
 typography.audit(reply)          # {'ok': False, 'issues': ['带了 2 处断句标点（第 6 条）'], ...}
-typography.format_reply(reply)   # ['先别说话 靠一下 今天不想说也行 我在']  ← 去标点 + 按 40 字断条
+typography.format_reply(reply)   # ['先别说话 靠一下', '今天不想说也行 我在']  ← 去标点 + 超十二字断条
 ```
 
-设置项 `settings.json` → `回复风格`：`无标点`（默认 `true`）、`单条字数上限`（默认 `40`）。
+设置项 `settings.json` → `回复风格`：`无标点`（默认 `true`）、`单条字数上限`（默认 `12`）、
+`短回应句号`（默认 `false`，开了「哦哦。」这类极短回应会保留末尾那一个句号）。
 去掉的只是**断句标点**；省略号、括号、引号、破折号保留——那些是留白和补白，删了句子会变硬。
 
 三条判定顺序，反了会产出「格式正确但没在听」的消息：
@@ -563,7 +565,7 @@ export LOVE_COMPANION_DATA_DIR=/your/custom/path
   - `python scripts/pipeline/orchestrator.py --status` 查看当前状态
   - `python scripts/migrate/migrate_v1.py --dry-run` 预演 v1→v2 迁移
   - `python scripts/style/dialogue.py` 多轮节奏自查（正例 / 反例 / 在线单轮三组示例）
-- **测试**：`python -m unittest discover -s tests`（411 项回归）
+- **测试**：`python -m unittest discover -s tests`（427 项回归）
 
 ---
 

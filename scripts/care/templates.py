@@ -69,6 +69,9 @@ _QUESTION_MARKS = ("？", "?")
 # 断句标点：一律换成空格（第 6 条）。语气零件（…—（）「」等）不在其中，必须留。
 _BREAK_PUNCT = "。，、；：！？,.;:!?"
 
+# 单条字数上限：一句十字顶天，十二是留了余量的线（与 style/typography.py 同口径）
+MAX_LINE_CHARS = 12
+
 
 def _tidy(text: str) -> str:
     """拼接与替换的唯一收口：断句标点换空格，多余空白压平
@@ -127,38 +130,65 @@ def apply_attachment(text: str, attachment: str, seed: int = 0) -> str:
     return _tidy(out)
 
 
-def split_messages(text: str, max_parts: int = 2) -> List[str]:
+def split_messages(text: str, max_parts: int = 4) -> List[str]:
     """把一条话术拆成多条短消息
 
-    微信里没人一次发三句：一条消息一个动作。但依恋后缀（「我在 看到就回你」）
-    必须留在最后一条，否则拆完就被截断了。
+    微信里没人一次发三句：一条消息一个动作。碎碎念的形态是**条数多、句子短**——
+    拆成三四条六到十字的短句，不是把三句揉进一条（第 4、8 条）。
 
     第 6 条之后断点从「句号」变成了「空格」，所以按空格拆；
     仍然兼容带标点的旧输入（外部传入的话术不一定过过 `_tidy`）。
+
+    两道：
+    1. **只在空格处断**。单个片段超 12 字才硬切——半字切会造出「我一直记着 我」
+       这种半句，比超长更难看。
+    2. **条数上限**。拆多了会刷屏，超过 `max_parts` 就把最短的相邻两条并起来。
+       并回来那一条可以略超 12 字：宁可长一点，也不要发八条。
     """
     src = _tidy(text or "")
     if not src:
         return []
-    parts = [p for p in src.split(" ") if p]
-    if len(parts) <= max_parts:
-        return parts
-    head = parts[:max_parts - 1]
-    head.append(" ".join(parts[max_parts - 1:]))
-    return head
+    words = [p for p in src.split(" ") if p]
+    segs: List[str] = []
+    for w in words:
+        segs.extend(_split_len(w, MAX_LINE_CHARS))
+
+    groups: List[str] = []
+    for seg in segs:
+        if groups and len(groups[-1]) + 1 + len(seg) <= MAX_LINE_CHARS:
+            groups[-1] = f"{groups[-1]} {seg}"
+        else:
+            groups.append(seg)
+
+    while len(groups) > max_parts and len(groups) > 1:
+        i = min(range(len(groups) - 1),
+                key=lambda k: len(groups[k]) + len(groups[k + 1]))
+        groups[i:i + 2] = [f"{groups[i]} {groups[i + 1]}"]
+    return [g for g in groups if g]
+
+
+def _split_len(text: str, limit: int) -> List[str]:
+    """单条超长就断，两段以内**均分**（13 字 → 7+6，不是 12+1）"""
+    if limit <= 0 or len(text) <= limit:
+        return [text]
+    if len(text) <= limit * 2:
+        mid = (len(text) + 1) // 2
+        return [text[:mid], text[mid:]]
+    return [text[:limit]] + _split_len(text[limit:], limit)
 
 
 # 各关怀类型的话术模板。{nick} 称呼 / {detail} 具体事实 / {topic} 她关心的事
 TEMPLATES: Dict[str, List[str]] = {
     "低落陪伴": [
-        "{nick} 今天听你说话就觉得有点累 {detail}",
+        "{nick} 听你说话就觉得有点累 {detail}",
         "{nick} 不想说也行 我在",
         "先别撑着了 {nick} 要不要我陪你发会儿呆",
         "听起来今天不太顺 我不问了 就陪你待着",
     ],
     "纪念日": [
-        "{nick} 今天是{detail} 我一直记着",
-        "{nick} {detail}——这个日子我可没忘",
-        "今天是我们的{detail} 谢谢你还在",
+        "{nick} {detail} 我一直记着",
+        "{nick} {detail} 这个日子我可没忘",
+        "今天{detail} 谢谢你还在",
     ],
     "深夜晚安": [
         "{nick} 很晚了 睡吧 明天再聊",
@@ -280,11 +310,12 @@ def render(kind: str, nickname: str = "", detail: str = "",
     return text
 
 
-def render_messages(kind: str, max_parts: int = 2, **kwargs: Any) -> List[str]:
+def render_messages(kind: str, max_parts: int = 4, **kwargs: Any) -> List[str]:
     """渲染成「多条短消息」而不是一条长话术
 
     一条消息一个动作：先接住，再说事，最后给确定性。三条糊成一条，
-    读起来就是客服公告。`max_parts` 控制最多拆几条，默认 2。
+    读起来就是客服公告。`max_parts` 控最多拆几条，默认 4——
+    碎碎念本来就该是多条短句，上限只是防刷屏。
 
     Returns:
         ["...", "..."]；未知 kind 返回空列表（调用方据此决定不发）

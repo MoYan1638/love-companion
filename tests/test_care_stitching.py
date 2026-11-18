@@ -96,20 +96,47 @@ class TestSplitMessages(unittest.TestCase):
         self.assertGreaterEqual(len(out), 1)
 
     def test_tail_stays_in_last_part(self):
-        """依恋后缀必须留在最后一条，不能被拆掉"""
-        parts = t.render_messages("深夜晚安", nickname="小美", max_parts=2,
+        """依恋后缀是最后的确定性信号，必须落在末尾几条里，不能被并到开头"""
+        parts = t.render_messages("深夜晚安", nickname="小美", max_parts=4,
                                   attachment="焦虑型", seed=0)
-        self.assertTrue(any("我在 看到就回你" in p for p in parts[-1:]), parts)
+        self.assertIn("看到就回你", " ".join(parts[-2:]), parts)
+        self.assertNotIn("看到就回你", parts[0], parts)
 
     def test_max_parts_respected(self):
-        parts = t.split_messages("先别说话。靠一下。我在。", max_parts=2)
-        self.assertEqual(len(parts), 2)
-        self.assertIn("我在", parts[-1])
+        """条数上限是防刷屏的，超了就把相邻两条并起来（宁可长一点也不发八条）"""
+        parts = t.split_messages(
+            "先别说话 靠一下 今天不想说也行 我在 看到就回你", max_parts=2)
+        self.assertEqual(len(parts), 2, parts)
 
     def test_split_no_longer_needs_punct(self):
         """第 6 条之后文本本来就没标点，拆分得按空格走"""
-        parts = t.split_messages("先别说话 靠一下 我在", max_parts=3)
-        self.assertEqual(parts, ["先别说话", "靠一下", "我在"])
+        parts = t.split_messages("先别说话 靠一下 今天不想说也行 我在", max_parts=4)
+        self.assertGreater(len(parts), 1, parts)
+        self.assertEqual(" ".join(parts).replace(" ", ""),
+                         "先别说话靠一下今天不想说也行我在", "断条不能丢字")
+
+    def test_every_part_fits_one_line(self):
+        """第 8 条：一条十来字顶天，碎碎念是多条短句，不是一条长句"""
+        for kind in t.TEMPLATES:
+            for att in ("焦虑型", "回避型", "安全型", "恐惧型"):
+                parts = t.render_messages(kind, nickname="小美",
+                                          detail="我们在一起三百天",
+                                          attachment=att, seed=0)
+                for p in parts:
+                    self.assertLessEqual(len(p), t.MAX_LINE_CHARS,
+                                         f"{kind}/{att}: {p}")
+
+    def test_short_words_get_merged(self):
+        """十个字以内就该是一条，别为了「多条」硬拆"""
+        self.assertEqual(t.split_messages("先别说话 靠一下 我在"), ["先别说话 靠一下 我在"])
+
+    def test_never_cuts_mid_word(self):
+        """两个空格段之间不会半字切开（「我一直记着 我」这种半句比超长更糟）"""
+        words = ["小美", "我一直记着", "我在", "看到就回你"]
+        parts = t.split_messages(" ".join(words))
+        for p in parts:
+            for w in p.split():
+                self.assertIn(w, words, f"切到了词中间：{p}")
 
     def test_unknown_kind_gives_empty_list(self):
         self.assertEqual(t.render_messages("不存在的类型", nickname="小美"), [])

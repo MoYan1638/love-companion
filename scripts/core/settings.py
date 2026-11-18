@@ -47,12 +47,31 @@ def _deep_merge(base: Dict[str, Any], override: Dict[str, Any]) -> Dict[str, Any
     return out
 
 
+# 旧版「回复风格」的单条字数默认值（v2.5.2 起改为 12：一句十字顶天）
+_LEGACY_REPLY_MAX = 40
+
+
+def _migrate(raw: Dict[str, Any]) -> Dict[str, Any]:
+    """把旧结构的 settings.json 往新口径上带
+
+    老版本生成的 settings.json 里存的是完整的「回复风格」= 40 字，深合并之后它
+    会盖掉新默认值——于是所有老用户都被锁在「一条四十字」的旧行为上。
+    「短回应句号」这个键是 v2.5.2 才有的，缺它就说明是旧结构；此时若上限正好是
+    旧的 40，就跟新口径走。新结构里手动设 40 的人不受影响。
+    """
+    style = raw.get("回复风格")
+    if isinstance(style, dict) and "短回应句号" not in style:
+        if style.get("单条字数上限") == _LEGACY_REPLY_MAX:
+            style["单条字数上限"] = 12
+    return raw
+
+
 def load(data_dir: Optional[str] = None) -> Dict[str, Any]:
     """读取全局设置（默认模板深合并用户 settings.json）"""
     raw = read_json(resolve_data_dir(data_dir) / "settings.json", {})
     if not isinstance(raw, dict):
         raw = {}
-    return _deep_merge(schema.settings_template(), raw)
+    return _deep_merge(schema.settings_template(), _migrate(raw))
 
 
 def decay_params(data_dir: Optional[str] = None) -> Dict[str, float]:

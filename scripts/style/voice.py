@@ -23,13 +23,15 @@ _CLAUSE_SPLIT = re.compile(r"(?<=[，,])")
 _SPACED = re.compile(r"[ \t]+")
 
 
-def split_short(text: str, max_len: int = 22) -> List[str]:
+def split_short(text: str, max_len: int = 12) -> List[str]:
     """把长回复拆成短句（模拟真人一句一句发）
 
     - 先按句末标点切
     - 文本已经过第 6 条（无断句标点、空格隔句）时，改按空格切
     - 仍过长的按逗号再切
     - **不补标点**：补句号等于把刚删掉的标点又加回来
+
+    默认 12 字与 `style/typography.py` 的「一条十字顶天」同口径。
     """
     text = (text or "").strip()
     if not text:
@@ -86,7 +88,8 @@ def shape(text: str, level: str = "标准", nickname: str = "",
     if intensity == 0 or not text:
         return [text] if text else []
 
-    max_len = {1: 40, 2: 22, 3: 16}[intensity]
+    # 强度越高，一条越短（一句十字顶天是标准档的线，见 reply-rules 第 8 条）
+    max_len = {1: 16, 2: 12, 3: 10}[intensity]
     night = is_night(hour)
     if night:
         max_len = int(max_len * 0.8)  # 深夜更短更柔
@@ -98,7 +101,10 @@ def shape(text: str, level: str = "标准", nickname: str = "",
     elif intensity >= 2 and night:
         pieces = [_soften(p) for p in pieces]
 
-    return pieces
+    # 收口：本层不生产断句标点，输入带进来的也不许漏出去
+    # （拆句时逗号/句号会留在段尾，形状已经定了，这里只清外形）
+    from scripts.style import typography  # 局部导入避免模块级循环依赖
+    return [typography.strip_punct(p) for p in pieces]
 
 
 def _add_modal(sentence: str, nickname: str = "", night: bool = False) -> str:

@@ -83,6 +83,13 @@ class TestSplitByLength(unittest.TestCase):
         self.assertEqual(len(parts), 3)
         self.assertEqual("".join(parts), "啊" * 90)
 
+    def test_hard_split_balances_two_pieces(self):
+        """13 字上限 12，不能切成 12+1（读起来像手滑），要均分"""
+        parts = typography.split_by_length("啊" * 13, 12)
+        self.assertEqual(len(parts), 2)
+        self.assertEqual("".join(parts), "啊" * 13)
+        self.assertLessEqual(max(len(p) for p in parts), 8)
+
     def test_empty(self):
         self.assertEqual(typography.split_by_length("", 40), [])
 
@@ -138,11 +145,71 @@ class TestFormatReply(unittest.TestCase):
         self.assertEqual(typography.format_reply(None), [])
 
 
+class TestShortReplyStop(unittest.TestCase):
+    """短回应句号：第 6 条的例外，默认关
+
+    「哦哦。」「嗯嗯。」「呃。」——极短回应末尾的那个句号是语气（收得干净、有点冷淡），
+    不是作文感。但这条不能放宽：多一个字、句中还有标点、或者整句在说话，都不能留。
+    """
+
+    def test_short_reply_keeps_stop_when_enabled(self):
+        for src in ("哦哦。", "嗯嗯。", "呃。", "好。", "行。"):
+            with self.subTest(src=src):
+                self.assertEqual(typography.strip_punct(src, keep_short_stop=True), src)
+
+    def test_short_reply_default_drops_stop(self):
+        self.assertEqual(typography.strip_punct("哦哦。"), "哦哦")
+
+    def test_not_short_enough_is_still_stripped(self):
+        """超过 4 字就不是短回应了，句号该去"""
+        out = typography.strip_punct("我知道了。", keep_short_stop=True)
+        self.assertEqual(out, "我知道了")
+        self.assertNotIn("。", out)
+
+    def test_two_stops_not_kept(self):
+        """「嗯。好。」是两个动作，不是短回应，照常去掉"""
+        out = typography.strip_punct("嗯。好。", keep_short_stop=True)
+        self.assertNotIn("。", out)
+
+    def test_audit_respects_short_stop(self):
+        r = typography.audit("哦哦。", keep_short_stop=True)
+        self.assertTrue(r["ok"], r["issues"])
+        self.assertEqual(r["punct"], 0)
+        self.assertFalse(typography.audit("哦哦。")["ok"])
+
+    def test_format_reply_reads_setting(self):
+        data_dir = tempfile.mkdtemp()
+        with open(os.path.join(data_dir, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"回复风格": {"无标点": True, "单条字数上限": 12, "短回应句号": True}},
+                      fh, ensure_ascii=False)
+        self.assertEqual(typography.format_reply("嗯嗯。", data_dir=data_dir), ["嗯嗯。"])
+
+
 class TestSettingsWiring(unittest.TestCase):
     def test_template_has_reply_style(self):
         style = schema.settings_template()["回复风格"]
         self.assertTrue(style["无标点"], "默认应该是「不带标点」，这是聊天窗里的常态")
-        self.assertEqual(style["单条字数上限"], 40)
+        self.assertEqual(style["单条字数上限"], 12, "一条十字顶天，留两字余量给语气词")
+        self.assertFalse(style["短回应句号"], "短回应默认不加句号，要加自己开")
+
+    def test_legacy_settings_get_migrated(self):
+        """老 settings.json 存的是旧默认 40 字，深合并会盖掉新默认——要迁到 12"""
+        data_dir = tempfile.mkdtemp()
+        with open(os.path.join(data_dir, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"回复风格": {"无标点": True, "单条字数上限": 40}},
+                      fh, ensure_ascii=False)
+        cfg = typography.style_config(data_dir)
+        self.assertEqual(cfg["单条字数上限"], 12)
+        self.assertFalse(cfg["短回应句号"])
+
+    def test_new_settings_keep_manual_limit(self):
+        """新结构里手动设的 40 是人家的选择，不许动"""
+        data_dir = tempfile.mkdtemp()
+        with open(os.path.join(data_dir, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"回复风格": {"无标点": True, "单条字数上限": 40,
+                                    "短回应句号": False}},
+                      fh, ensure_ascii=False)
+        self.assertEqual(typography.style_config(data_dir)["单条字数上限"], 40)
 
     def test_cli_prints_json(self):
         env = dict(os.environ)

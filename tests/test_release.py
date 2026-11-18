@@ -161,11 +161,40 @@ class TestReplyRuleAlignment(unittest.TestCase):
         text = (ROOT / "references" / "dialogue-playbook.md").read_text(encoding="utf-8")
         self.assertIn("第 6 条", text)
 
+    def test_readme_samples_have_no_break_punct(self):
+        """README 首页的两段示例是别人第一眼看到的「这个技能怎么说话」
+
+        它比任何规范都像模板：示例带句号，用户就会照着带。
+        """
+        text = (ROOT / "README.md").read_text(encoding="utf-8")
+        bad = []
+        for i, line in enumerate(text.split("\n"), 1):
+            m = re.match(r"^(你|冷月|温婉|对方)：(.+)$", line)
+            if m and any(ch in self.BREAK for ch in m.group(2)):
+                bad.append((i, line))
+        self.assertFalse(bad, "README 示例里有断句标点（第 6 条）：" + str(bad[:3]))
+
     def test_reply_rules_scopes_the_rule(self):
         """第 6 条管到哪，必须写清楚——写清楚才不会两头都做错"""
         text = (ROOT / "references" / "reply-rules.md").read_text(encoding="utf-8")
         self.assertIn("## 先划范围", text)
         self.assertIn("存量怎么处理的", text)
+
+    def test_reply_rules_keeps_length_and_stop_in_sync_with_code(self):
+        """文档说的字数上限、短回应例外，必须和代码里的默认值一致
+
+        这三处最容易漂：文档写十字、代码留四十字，用户按文档学却被打回；
+        或者文档说「都可以加句号」，代码又只认三字以内。
+        """
+        from scripts.style import typography
+
+        text = (ROOT / "references" / "reply-rules.md").read_text(encoding="utf-8")
+        self.assertIn("十个字顶天", text, "第 8 条要写清「一句十个字顶天」")
+        self.assertIn(f"默认 {typography.DEFAULT_MAX_CHARS}",
+                      text, "文档里的字数上限与代码不一致")
+        self.assertIn("短回应句号", text, "短回应句号这个开关要在文档里出现")
+        self.assertIn(f"≤ {typography.SHORT_REPLY_MAX} 字",
+                      text, "文档里的短回应字上限与代码不一致")
 
     def test_preset_catchphrases_have_no_break_punct(self):
         """口头禅会原样拼进消息，带「！」「？」就等于绕过整条排版层"""
