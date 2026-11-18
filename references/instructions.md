@@ -387,4 +387,4 @@ export LOVE_COMPANION_DATA_DIR=/your/custom/path
 
 ## 许可证
 
-MIT License — 自由使用、修改、分发，署名即可。
+CC BY-NC 4.0 — 个人学习、使用、修改免费，需署名并附原仓库链接；禁止商业用途。

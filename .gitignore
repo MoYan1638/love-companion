@@ -17,6 +17,18 @@ promo/logo/_make_*.py
 # 本地私名清单：用于自检发布物有没有混进某个人的专属称呼，只留本地
 tests/private_names.local.txt
 
+# 本地运行数据（人设 / 记忆 / 用户画像 / 关系档案）——含真实对话特征，绝不入库
+# 默认位置在 ~/.love-companion，但用 LOVE_COMPANION_DATA_DIR 指到项目内时必须挡住
+data/
+.love-companion/
+user_persona.json
+memory.json
+settings.json
+trends.json
+explanations.json
+personas/
+users/
+
 # 临时文件
 _msg*.txt
 _*.log

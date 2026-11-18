@@ -7,10 +7,10 @@
 **给任何AI装上恋人模式 · 8种人设一键切换 · 开源免费**
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/deed.zh)
-[![Version](https://img.shields.io/badge/Version-2.4.4-ff69b4)]()
+[![Version](https://img.shields.io/badge/Version-2.4.5-ff69b4)]()
 [![Skill Type](https://img.shields.io/badge/Type-AI%20Skill-blueviolet)]()
 [![Presets](https://img.shields.io/badge/Presets-8-pink)]()
-[![Tests](https://img.shields.io/badge/Tests-368%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/Tests-376%20passing-brightgreen)]()
 
 *一个通用的 AI 恋人角色扮演技能包，即插即用，适配任意 AI Agent 框架*
 
@@ -202,7 +202,7 @@ love-companion/
 │   ├── 📁 multimodal/       # 配图计划
 │   ├── 📁 panel/            # 可解释面板 + 控制开关
 │   └── 📁 migrate/          # v1 → v2 无损迁移
-├── 📁 tests/                # 368 项回归测试（覆盖 v1 兼容与 v2 全流程）
+├── 📁 tests/                # 376 项回归测试（覆盖 v1 兼容与 v2 全流程）
 ├── 📁 docs/
 │   └── 📐 architecture.md   # 架构设计（在线/离线边界、设计取舍、数据可靠性）
 └── 📁 references/
@@ -364,7 +364,7 @@ python scripts/trends/store.py digest              # 查看趋势知识库摘要
 python -m unittest discover -s tests -t .
 ```
 
-368 项回归测试，覆盖 v1 兼容、v2 各模块、数据可靠性与 CLI 冒烟。
+376 项回归测试，覆盖 v1 兼容、v2 各模块、数据可靠性与 CLI 冒烟。
 
 ---
 

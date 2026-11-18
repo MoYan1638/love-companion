@@ -10,7 +10,6 @@
 记录只存**引用关系**（记忆 id + 字段路径），不存原文，避免二次留存隐私。
 """
 
-import json
 import sys
 from datetime import datetime
 from pathlib import Path

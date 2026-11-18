@@ -119,6 +119,21 @@ class TestGenericToEveryone(unittest.TestCase):
                 for name in names:
                     self.assertNotIn(name, text, f"{path} 混入个人化专名「{name}」")
 
+    def test_heading_numbers_are_sequential(self):
+        """章节编号必须连续：跳号会让「见第 N 节」这类引用失效，
+        也说明中间有整节被误删或改标题时漏改编号。"""
+        cn = "一二三四五六七八九十"
+        for path in (ROOT / "references").rglob("*.md"):
+            with self.subTest(file=path.name):
+                seq = [m.group(1)
+                       for m in (re.match(r"^##\s+([一二三四五六七八九十])、", line)
+                                 for line in path.read_text(encoding="utf-8").splitlines())
+                       if m]
+                if not seq:
+                    continue
+                self.assertEqual(seq, list(cn[:len(seq)]),
+                                 f"{path.name} 章节编号跳号：{''.join(seq)}")
+
     def test_private_names_file_stays_local(self):
         """清单必须留在本地——被 git 跟踪就等于把名字公开了"""
         import subprocess

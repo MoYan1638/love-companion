@@ -15,16 +15,28 @@ Love Companion - Configuration & Memory Manager
 本脚本由 AI Agent 自动调用，用户无需手动执行。
 所有操作通过标准化指令触发。
 
-许可证：MIT License
+许可证：CC BY-NC 4.0（非商用，详见仓库根目录 LICENSE）
 """
 
 import copy
 import json
 import os
 import re
+import sys
 from datetime import datetime
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+# Windows 的 cmd / PowerShell 默认代码页 936（GBK），而人设里出现 emoji 是常态
+# （"口头禅": ["好呀😊"]）。直接 print 到 GBK 终端会抛 UnicodeEncodeError，
+# 用户看到的是 traceback 而不是结果。这里只把错误处理改成 replace，**不动编码**：
+# 能显示的照旧显示，显示不了的变成「?」，不崩。
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(errors="replace")
+    except Exception:  # noqa: BLE001  非文本流 / 老版本 Python 直接跳过
+        pass
+del _stream
 
 
 class LoveCompanionManager:

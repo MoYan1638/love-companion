@@ -266,7 +266,7 @@ v2 加了一层后处理专门拦这个：三层黑名单（禁用词 / 结构�
 love-companion/
 ├── SKILL.md                 # 技能主文件
 ├── README.md
-├── LICENSE                  # MIT
+├── LICENSE                  # CC BY-NC 4.0
 ├── scripts/
 │   ├── manager.py           # v1 配置与记忆管理（全部保留）
 │   ├── core/                # schema · 设置 · 数据可靠性 · 隐私脱敏 · 内容边界
