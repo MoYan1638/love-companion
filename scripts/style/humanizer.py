@@ -56,6 +56,7 @@ L2_PATTERNS: List[tuple] = [
 ]
 
 _CJK_PUNCT = re.compile(r"[。！？!?；;]")
+_SPACED = re.compile(r"[ \t]+")
 _EMOJI = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]")
 _MODAL = ("呀", "呢", "嘛", "哦", "啦", "~", "～")
 
@@ -66,13 +67,28 @@ _WRITTEN_WORDS: List[str] = [
 ]
 
 
+def _sentences(text: str) -> List[str]:
+    """分句：优先按句末标点，无标点时按空格（回复十条第 6 条之后的常态）
+
+    不兼容空格会出两个错：一是把「平均句长」算成整条长度，短句被判成
+    「句子过长」；二是把一段正常的碎碎念误报成「缺语气词」。
+    两种都是假阳性，方向错得很危险——会让守门员把好句子拦下来。
+    """
+    parts = [s for s in _CJK_PUNCT.split(text) if s.strip()]
+    if len(parts) <= 1 and _SPACED.search(text):
+        spaced = [s for s in _SPACED.split(text) if s]
+        if len(spaced) > 1:
+            return spaced
+    return parts
+
+
 def scan(text: str) -> Dict[str, Any]:
     """检测一段回复的 AI 写作特征"""
     text = text or ""
     hits_l1 = [w for w in L1_WORDS if re.search(w, text)]
     hits_l2 = [name for name, pat in L2_PATTERNS if pat.search(text)]
 
-    sentences = [s for s in _CJK_PUNCT.split(text) if s.strip()]
+    sentences = _sentences(text)
     avg_len = (sum(len(s) for s in sentences) / len(sentences)) if sentences else 0
     emoji_count = len(_EMOJI.findall(text))
     modal_count = sum(text.count(m) for m in _MODAL)

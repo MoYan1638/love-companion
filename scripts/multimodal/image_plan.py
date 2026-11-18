@@ -103,12 +103,12 @@ def _care_subject(care_text: str) -> Dict[str, str]:
 
 # 图文衔接话术：按情绪给一句，避免「给你看张图」这种突兀句式
 CAPTIONS: Dict[str, List[str]] = {
-    "低落": ["刚看到这个，想到你了。", "不用回，就看看。"],
-    "疲惫": ["给你留了个位置。", "今天就到这儿吧，看看这个。"],
-    "开心": ["这个我第一反应就想发给你。", "你看这个像不像我们那天说的。"],
-    "想念": ["刚路过的时候拍的，想给你看。", "有点想你，就发了。"],
-    "日常": ["随手拍的。", "今天这个还挺好看的。"],
-    "纪念": ["我记得今天。", "这个日子，给你留了一张。"],
+    "低落": ["刚看到这个 想到你了", "不用回 就看看"],
+    "疲惫": ["给你留了个位置", "今天就到这儿吧 看看这个"],
+    "开心": ["这个我第一反应就想发给你", "你看这个像不像我们那天说的"],
+    "想念": ["刚路过的时候拍的 想给你看", "有点想你 就发了"],
+    "日常": ["随手拍的", "今天这个还挺好看的"],
+    "纪念": ["我记得今天", "这个日子 给你留了一张"],
 }
 
 _IMAGE_BUDGET = 40      # 图文衔接话术的 Token 上限（从关怀/人格余量里出）
@@ -228,10 +228,11 @@ class ImagePlanner:
 
         voice = voice or {}
         tails = voice.get("语气词") or []
+        # 第 6 条：不补句号，句子之间用空格（与 care/templates.py 同口径）
         if tails and not text.rstrip().endswith(tuple("呀呢嘛哦啦咯哒～")):
-            text = text.rstrip("。") + tails[0] + "。"
+            text = text.strip() + tails[0]
         if float(voice.get("emoji频率", 0) or 0) >= 0.5:
-            text = text.rstrip("。") + " 📷"
+            text = text.strip() + " 📷"
 
         if corrections:
             from scripts.persona.library import PersonaLibrary

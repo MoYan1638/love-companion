@@ -208,7 +208,7 @@ class TestAttachmentDifferentiation(unittest.TestCase):
 
     def test_anxious_gets_certainty(self):
         out = self.t.render("久未联系", nickname="宝贝", attachment="焦虑型", seed=0)
-        self.assertTrue(any(s in out for s in ("我在，看到就回你", "不是客气，是真的在")))
+        self.assertTrue(any(s in out for s in ("我在 看到就回你", "不是客气 是真的在")))
 
     def test_avoidant_gets_space(self):
         out = self.t.render("久未联系", nickname="宝贝", attachment="回避型", seed=0)
@@ -225,18 +225,18 @@ class TestAttachmentDifferentiation(unittest.TestCase):
 
     def test_fearful_gets_certainty_and_exit(self):
         out = self.t.render("低落陪伴", nickname="宝贝", attachment="恐惧型", seed=0)
-        self.assertTrue(any(s in out for s in ("我在，但你不用马上回", "想说的时候再说")))
+        self.assertTrue(any(s in out for s in ("我在 但你不用马上回", "想说的时候再说")))
 
     def test_secure_keeps_it_natural(self):
         out = self.t.render("日常", nickname="宝贝", attachment="安全型", seed=0)
-        self.assertNotIn("我在，看到就回你", out)
+        self.assertNotIn("我在 看到就回你", out)
         self.assertNotIn("不用回我", out)
 
     def test_attachment_suffix_survives_short_preference(self):
         """长度偏好=短也不能砍掉焦虑型最需要的那句确定性"""
         out = self.t.render("久未联系", nickname="宝贝", attachment="焦虑型",
                             length_pref="短", seed=0)
-        self.assertIn("我在，看到就回你", out)
+        self.assertIn("我在 看到就回你", out)
 
     def test_unknown_attachment_safe(self):
         out = self.t.render("久未联系", nickname="宝贝", attachment="火星型", seed=0)

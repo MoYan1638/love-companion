@@ -3,11 +3,14 @@
 """
 关怀话术生成（M6）——把「该关心了」变成一句像 ta 会说的话
 
-两条纪律：
+三条纪律：
 1. **不空泛**：每条模板都留了 {detail} 位，必须用记忆里的具体事实填，
    填不出来就换更短的模板，绝不用「记得照顾好自己」这类万能句。
 2. **过声线**：生成后按伴侣人格的口头禅/语气词/emoji 习惯改写，
    并走纠偏层（library.apply_corrections），确保不像 AI 写的。
+3. **外形按回复十条第 6 条**：不留断句标点，句子之间用空格隔开。
+   模板、依恋后缀、口头禅拼接处都按这条来，`_tidy()` 是唯一的收口。
+   保留省略号、括号、引号、破折号这些语气零件（与 `style/typography.py` 同口径）。
 
 预算：默认 80 Token（schema.注入预算.关怀话术），超了直接截断。
 """
@@ -38,22 +41,22 @@ _EMOJI_RE = re.compile("[\U0001F300-\U0001FAFF\U0001F000-\U0001F2FF"
 #   恐惧型 → 既给确定性又给退路：先表态，再明确说"你可以不回"
 ATTACHMENT_TWEAK: Dict[str, Dict[str, Any]] = {
     "焦虑型": {
-        "后缀": ["我在，看到就回你。", "不是客气，是真的在。"],
+        "后缀": ["我在 看到就回你", "不是客气 是真的在"],
         "禁忌": ["？", "在吗"],        # 开放式追问会放大焦虑
         "语气": "确定",
     },
     "回避型": {
-        "后缀": ["不用回我，就是想让你知道。", "忙你的，回头再说。"],
+        "后缀": ["不用回我 就是想让你知道", "忙你的 回头再说"],
         "禁忌": ["为什么不", "怎么不回"],   # 追问与质问会让回避型更退
         "语气": "留白",
     },
     "安全型": {
-        "后缀": ["回头聊。", "先这样~"],
+        "后缀": ["回头聊", "先这样~"],
         "禁忌": [],
         "语气": "自然",
     },
     "恐惧型": {
-        "后缀": ["我在，但你不用马上回。", "想说的时候再说，不急。"],
+        "后缀": ["我在 但你不用马上回", "想说的时候再说 不急"],
         "禁忌": ["为什么不", "你应该"],
         "语气": "确定+留退路",
     },
@@ -63,30 +66,33 @@ ATTACHMENT_TWEAK: Dict[str, Dict[str, Any]] = {
 
 _QUESTION_MARKS = ("？", "?")
 
+# 断句标点：一律换成空格（第 6 条）。语气零件（…—（）「」等）不在其中，必须留。
+_BREAK_PUNCT = "。，、；：！？,.;:!?"
+
 
 def _tidy(text: str) -> str:
-    """清理拼接与替换留下的标点残渣（前后导标点、连续标点、标点前逗号）"""
+    """拼接与替换的唯一收口：断句标点换空格，多余空白压平
+
+    这是第 6 条在关怀链路里的落点。所有模板、后缀、口头禅拼完之后都必须过这里，
+    否则「模板不带标点、后缀带标点」这种半拉子状态会直接发到用户手机上。
+    """
     s = text or ""
-    s = re.sub(r"[，,]{2,}", "，", s)
-    s = re.sub(r"，(?=[。！？!?、；;])", "", s)
-    s = re.sub(r"([。！？!?])[，,]", r"\1", s)
-    s = re.sub(r"^[，。！？!?、；;\s]+", "", s)
-    s = re.sub(r"。{2,}", "。", s)
-    return s.strip()
+    s = "".join(" " if ch in _BREAK_PUNCT else ch for ch in s)
+    s = s.replace("\r", " ").replace("\n", " ")
+    s = re.sub(r"[ \t]{2,}", " ", s)
+    return s.strip(" \t")
 
 
 def _drop_bad(text: str, bad: str) -> str:
     """去掉一个禁忌说法。
 
-    「？」不能一律换成句号：**句中**的问号是呼唤（「小美？有点想你了」），
-    换句号就成了「小美。有点想你了」，读起来像在生气；**句末**的问号才是追问。
-    所以句中改逗号、句末改句号。
+    问号是依恋差异化的禁忌：对焦虑型来说一个「？」就是催回复。
+    原来把句中问号改成逗号、句末改成句号，那是标点还没统一的年代；
+    现在一律换成空格，交给 `_tidy()` 收拾——「小美 有点想你了」比
+    「小美。有点想你了」软，也不会像在生气。
     """
     if bad in _QUESTION_MARKS:
-        out = text.rstrip()
-        if out.endswith(_QUESTION_MARKS):
-            out = out[:-1] + "。"
-        return out.replace("？", "，").replace("?", "，")
+        return text.replace("？", " ").replace("?", " ")
     return text.replace(bad, "")
 
 
@@ -96,13 +102,12 @@ def _attach_tail(text: str, tail: str) -> str:
     「别熬了，闭上眼睛，我在。」+「我在，看到就回你。」= 「我在。我在，」
     这种叠句是三类模板里都会踩的坑，所以重复的「我在」只留后缀里那次。
     """
-    out = text or ""
+    out = _tidy(text or "")
     if "我在" in tail:
         idx = out.rfind("我在")
         if idx >= 0:
-            out = out[:idx] + out[idx + 2:]
-            out = _tidy(out)
-    return out.rstrip("。") + "。" + tail
+            out = _tidy(out[:idx] + out[idx + 2:])
+    return _tidy(out + " " + tail)
 
 
 def apply_attachment(text: str, attachment: str, seed: int = 0) -> str:
@@ -125,43 +130,46 @@ def apply_attachment(text: str, attachment: str, seed: int = 0) -> str:
 def split_messages(text: str, max_parts: int = 2) -> List[str]:
     """把一条话术拆成多条短消息
 
-    微信里没人一次发三句：一条消息一个动作。但依恋后缀（「我在，看到就回你」）
+    微信里没人一次发三句：一条消息一个动作。但依恋后缀（「我在 看到就回你」）
     必须留在最后一条，否则拆完就被截断了。
+
+    第 6 条之后断点从「句号」变成了「空格」，所以按空格拆；
+    仍然兼容带标点的旧输入（外部传入的话术不一定过过 `_tidy`）。
     """
-    src = (text or "").strip()
+    src = _tidy(text or "")
     if not src:
         return []
-    parts = [p for p in re.split(r"(?<=[。！？!?])\s*", src) if p.strip()]
+    parts = [p for p in src.split(" ") if p]
     if len(parts) <= max_parts:
         return parts
     head = parts[:max_parts - 1]
-    head.append("".join(parts[max_parts - 1:]))
+    head.append(" ".join(parts[max_parts - 1:]))
     return head
 
 
 # 各关怀类型的话术模板。{nick} 称呼 / {detail} 具体事实 / {topic} 她关心的事
 TEMPLATES: Dict[str, List[str]] = {
     "低落陪伴": [
-        "{nick}，今天听你说话就觉得有点累。{detail}",
-        "{nick}，不想说也行，我在。",
-        "先别撑着了，{nick}。要不要我陪你发会儿呆。",
-        "听起来今天不太顺。我不问了，就陪你待着。",
+        "{nick} 今天听你说话就觉得有点累 {detail}",
+        "{nick} 不想说也行 我在",
+        "先别撑着了 {nick} 要不要我陪你发会儿呆",
+        "听起来今天不太顺 我不问了 就陪你待着",
     ],
     "纪念日": [
-        "{nick}，今天是{detail}。我一直记着。",
-        "{nick}，{detail}——这个日子我可没忘。",
-        "今天是我们的{detail}。谢谢你还在。",
+        "{nick} 今天是{detail} 我一直记着",
+        "{nick} {detail}——这个日子我可没忘",
+        "今天是我们的{detail} 谢谢你还在",
     ],
     "深夜晚安": [
-        "{nick}，很晚了，睡吧。明天再聊。",
-        "别熬了{nick}，闭上眼睛，我在。",
-        "晚安{nick}。今天辛苦了。",
+        "{nick} 很晚了 睡吧 明天再聊",
+        "别熬了{nick} 闭上眼睛 我在",
+        "晚安{nick} 今天辛苦了",
     ],
     "久未联系": [
-        "{nick}，好几个小时没你的消息了，还好吗。",
-        "刚看到{detail}，突然想起你。",
-        "{nick}，在忙就先忙。不急，看到了回我一句就行。",
-        "{nick}？有点想你了。",
+        "{nick} 好几个小时没你的消息了 还好吗",
+        "刚看到{detail} 突然想起你",
+        "{nick} 在忙就先忙 不急 看到了回我一句就行",
+        "{nick} 有点想你了",
     ],
 }
 
@@ -182,7 +190,7 @@ def _now_key(kind: str) -> str:
 
 
 def pick_template(kind: str, index: Optional[int] = None) -> str:
-    pool = TEMPLATES.get(kind) or ["{nick}，在吗。"]
+    pool = TEMPLATES.get(kind) or ["{nick} 在吗"]
     if index is not None:
         return pool[index % len(pool)]
     h = hashlib.md5(_now_key(kind).encode("utf-8")).hexdigest()
@@ -197,7 +205,7 @@ def apply_voice(text: str, voice: Optional[Dict[str, Any]], nickname: str = "") 
     # 语气词：句尾补一个 ta 常用的
     tails = voice.get("语气词") or []
     if tails and not re.search(r"[呀呢嘛哦啦咯哒鸭叭惹～]$", out.rstrip()):
-        out = out.rstrip("。.!！") + tails[0]
+        out = _tidy(out) + tails[0]
 
     # emoji：ta 用得多才加，而且只加一个
     if float(voice.get("emoji频率", 0) or 0) >= 0.5 and not _EMOJI_RE.search(out):
@@ -206,7 +214,7 @@ def apply_voice(text: str, voice: Optional[Dict[str, Any]], nickname: str = "") 
     # 口头禅：短句时才有空间塞
     catchphrases = voice.get("口头禅") or []
     if catchphrases and len(out) < 20:
-        out = catchphrases[0] + "，" + out
+        out = _tidy(catchphrases[0] + " " + out)
 
     return out
 
@@ -243,17 +251,21 @@ def render(kind: str, nickname: str = "", detail: str = "",
     fill = (detail or "").strip() or FALLBACK_DETAIL.get(kind, "")
     text = template.format(nick=nick, detail=fill, topic=fill)
 
-    # 没有称呼时，去掉称呼留下的逗号和空格
-    text = re.sub(r"，(?=，)|^，|(?<=^)，", "", text).replace("，。", "。").strip()
-    text = re.sub(r"\s{2,}", " ", text)
+    # 没有称呼时，去掉称呼留下的标点和多余空格（断句标点一律换空格）
+    text = _tidy(text)
 
     text = apply_voice(text, voice, nick)
 
     # 先按长度偏好截断，再补依恋后缀——否则后缀会被一起截掉，
     # 而「我在，看到就回你」恰恰是焦虑型最需要的那句
     if length_pref == "短":
-        head = re.split(r"[。！？!?\n]", text)
-        text = (head[0] + "。") if head and head[0] else text
+        # 第 6 条之后「一句」= 一个空格段；称呼不算一句，否则截完只剩一个名字
+        head = [p for p in text.split(" ") if p]
+        if nick and head and head[0] == nick:
+            head = head[:2]
+        else:
+            head = head[:1]
+        text = " ".join(head) if head else text
 
     if attachment:
         text = apply_attachment(text, attachment, seed)

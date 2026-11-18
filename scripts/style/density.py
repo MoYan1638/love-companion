@@ -142,7 +142,9 @@ def scan_structures(text: str) -> List[Dict[str, Any]]:
 def thin_structures(text: str, skip: Optional[callable] = None) -> Dict[str, Any]:
     """把超出预算的结构腔压下去。
 
-    只有破折号会自动改成逗号；其余只报告，交给上层重写（不硬改语义）。
+    只有破折号会自动处理；其余只报告，交给上层重写（不硬改语义）。
+    破折号、顿号改成**空格**而不是逗号：回复十条第 6 条要求不留断句标点，
+    改成逗号等于把刚删掉的标点又装回去（之前就是这样，v2.5 后统一为空格）。
     skip(line) 返回 True 的行（代码块/路径/表格）整行不碰。
     """
     src = text or ""
@@ -180,7 +182,7 @@ def thin_structures(text: str, skip: Optional[callable] = None) -> Dict[str, Any
             if not keep[i]:
                 continue
             lines[i], n = f["re"].subn(
-                lambda m: m.group(0).replace("——", "，").replace("—", "，").replace("、", "，"),
+                lambda m: m.group(0).replace("——", " ").replace("—", " ").replace("、", " "),
                 line, count=surplus)
             surplus -= n
             thinned += n

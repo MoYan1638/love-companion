@@ -136,5 +136,52 @@ class TestDocConsistency(unittest.TestCase):
                               f"{name} 的测试数量与实际的 {total} 项不一致")
 
 
+class TestReplyRuleAlignment(unittest.TestCase):
+    """回复十条第 6 条是外形红线，文档里的标本必须跟代码同一个口径
+
+    这一类最阴：代码改对了，标本还带标点，模型照着标本学，学回来的就是
+    「我在。你说。」——守门脚本拦不住，因为那是它自己从文档里抄的。
+    """
+
+    BREAK = "。，、；：！？,.;:!?"
+
+    def _playbook_dialogue_lines(self):
+        text = (ROOT / "references" / "dialogue-playbook.md").read_text(encoding="utf-8")
+        for i, line in enumerate(text.split("\n"), 1):
+            if re.match(r"^(你|对方)：", line):
+                yield i, line
+
+    def test_playbook_samples_have_no_break_punct(self):
+        bad = [(i, l) for i, l in self._playbook_dialogue_lines()
+               if any(ch in self.BREAK for ch in l.split("：", 1)[1])]
+        self.assertFalse(bad, "标本里有断句标点（第 6 条）：" + str(bad[:3]))
+
+    def test_playbook_states_the_punct_rule(self):
+        """口径改了，得在文件里说明，否则下次有人按旧印象改回去"""
+        text = (ROOT / "references" / "dialogue-playbook.md").read_text(encoding="utf-8")
+        self.assertIn("第 6 条", text)
+
+    def test_reply_rules_scopes_the_rule(self):
+        """第 6 条管到哪，必须写清楚——写清楚才不会两头都做错"""
+        text = (ROOT / "references" / "reply-rules.md").read_text(encoding="utf-8")
+        self.assertIn("## 先划范围", text)
+        self.assertIn("存量怎么处理的", text)
+
+    def test_preset_catchphrases_have_no_break_punct(self):
+        """口头禅会原样拼进消息，带「！」「？」就等于绕过整条排版层"""
+        import json as _json
+        text = (ROOT / "references" / "personas.md").read_text(encoding="utf-8")
+        found = re.findall(r'"口头禅":\s*(\[[^\]]*\])', text)
+        self.assertTrue(found, "没从 personas.md 抽到口头禅，正则失效了")
+        bad = []
+        for raw in found:
+            for phrase in _json.loads(raw):
+                # 「...」是省略号（语气零件），先摘掉再查单个英文标点
+                probe = phrase.replace("...", "").replace("…", "")
+                if any(ch in self.BREAK for ch in probe):
+                    bad.append(phrase)
+        self.assertFalse(bad, "预设口头禅里有断句标点：" + "、".join(bad))
+
+
 if __name__ == "__main__":
     unittest.main()
