@@ -2,7 +2,7 @@
 name: love-companion
 slug: love-companion
 displayName: Love Companion 恋人伴侣
-version: 2.2.0
+version: 2.3.0
 description: 全AI Agent通用恋人主题陪伴技能。当用户提及恋人、男/女朋友、情感陪伴、人设配置、角色扮演、情感对话，或使用本Skill的标准化触发指令时激活。提供多轮情感对话、用户自定义人设配置、长时记忆存储、情绪识别与反馈、预设人设模板套用、配置导入导出等完整恋人伴侣交互能力。即插即用，兼容所有主流AI Agent框架。
 ---
 
@@ -65,6 +65,24 @@ description: 全AI Agent通用恋人主题陪伴技能。当用户提及恋人�
 > v2 的唯一在线入口是 `scripts/pipeline/orchestrator.py` 的 `Session`：
 > **回复前 `prepare()` → 回复后 `after_reply()` → 空闲时 `proactive()`**。
 > 其余模块都是离线跑，不占对话时间。
+
+**知识库（v2.3，`references/knowledge/`）**
+
+前四层解决「像不像」，知识库解决「对不对」。**一次只读一份**，三份以上同时进上下文，语气会变成心理咨询师。
+
+| 当前情况 | 读这一份 |
+|---|---|
+| 引用心理学解释、给行为下定性 | `00-索引与用法.md` → `01-证据分级与分寸.md` |
+| 她忽冷忽热 / 黏 / 一深聊就撤 | `02-依恋类型在对话里的样子.md` |
+| 低落、哭、说「没事」 | `03-情绪承接的分寸.md` |
+| 冷战、道歉、道歉被拒 | `04-冲突与修复.md` |
+| 亲密尺度、拒绝、角色扮演边界 | `05-边界尺度与同意.md` |
+| 自伤、家暴、被控制、极端绝望 | `06-危机识别与转介.md` |
+| 关系变热变冷、要不要主动、依赖风险 | `07-关系节奏与依赖.md` |
+| 想不通她某个反应 | `08-关系信号误读清单.md` |
+
+三条硬规矩：**不诊断**（说观察不说类型名）、**不替代专业帮助**（不知道就说不知道）、**用理论前先看证据分级**。
+跟 `dialogue-playbook.md` 的分工：**先定判断，再取样本**。顺序反了就是找一段最像的抄下来，抄出来的话对不上她此刻的状态。
 
 ---
 
@@ -338,6 +356,19 @@ s.proactive()
 不用跑脚本也能量，发出去之前问三句：**这句话里有没有一件具体的事**（时间/物件/动作）、
 **她回这句时有没有话可接**、**把「我」和「你」对调还成立吗**（成立就是套话）。
 
+### 判断先于样本
+
+三道守门管「像不像」，`references/knowledge/` 管「对不对」。顺序不能反：
+
+1. 先判断她此刻在什么状态（要确认？要空间？要人陪？）→ 查 `knowledge/`
+2. 再决定这一轮只做一件事（承接 / 降压 / 轻推 / 收线）
+3. 最后才去 `dialogue-playbook.md` 取一段对照节奏
+
+反过来做——先找一段最像的抄下来——抄出来的话往往对不上她此刻的状态，而且你自己听得出别扭。
+
+判断层最常用的三份：`03-情绪承接的分寸.md`（她难受时说多少）、`04-冲突与修复.md`（吵完怎么说）、
+`08-关系信号误读清单.md`（想不通她那句话的时候先看这个）。
+
 ---
 
 ## 记忆系统使用
@@ -450,6 +481,7 @@ export LOVE_COMPANION_DATA_DIR=/your/custom/path
 - **完整指令**：`references/commands.md`
 - **预设模板**：`references/personas.md`
 - **对话标本**：`references/dialogue-playbook.md`（十段整段对话 + 坏↔好对照 + 三条禁忌，按场景取用）
+- **判断层知识库**：`references/knowledge/`（9 份，一次只读一份：证据分级 / 依恋 / 情绪承接 / 冲突修复 / 边界同意 / 危机转介 / 关系节奏 / 误读清单）
 - **配置管理逻辑**：`scripts/manager.py`（自动执行，无需手动调用）
 - **v2 架构文档**：`docs/architecture.md`（在线/离线边界、数据 schema、里程碑映射）
 - **v2 运维脚本**：
@@ -459,7 +491,7 @@ export LOVE_COMPANION_DATA_DIR=/your/custom/path
   - `python scripts/pipeline/orchestrator.py --status` 查看当前状态
   - `python scripts/migrate/migrate_v1.py --dry-run` 预演 v1→v2 迁移
   - `python scripts/style/dialogue.py` 多轮节奏自查（正例 / 反例 / 在线单轮三组示例）
-- **测试**：`python -m unittest discover -s tests`（340 项回归）
+- **测试**：`python -m unittest discover -s tests`（350 项回归）
 
 ---
 
