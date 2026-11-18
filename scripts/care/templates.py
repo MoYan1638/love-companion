@@ -61,6 +61,50 @@ ATTACHMENT_TWEAK: Dict[str, Dict[str, Any]] = {
 }
 
 
+_QUESTION_MARKS = ("？", "?")
+
+
+def _tidy(text: str) -> str:
+    """清理拼接与替换留下的标点残渣（前后导标点、连续标点、标点前逗号）"""
+    s = text or ""
+    s = re.sub(r"[，,]{2,}", "，", s)
+    s = re.sub(r"，(?=[。！？!?、；;])", "", s)
+    s = re.sub(r"([。！？!?])[，,]", r"\1", s)
+    s = re.sub(r"^[，。！？!?、；;\s]+", "", s)
+    s = re.sub(r"。{2,}", "。", s)
+    return s.strip()
+
+
+def _drop_bad(text: str, bad: str) -> str:
+    """去掉一个禁忌说法。
+
+    「？」不能一律换成句号：**句中**的问号是呼唤（「小美？有点想你了」），
+    换句号就成了「小美。有点想你了」，读起来像在生气；**句末**的问号才是追问。
+    所以句中改逗号、句末改句号。
+    """
+    if bad in _QUESTION_MARKS:
+        out = text.rstrip()
+        if out.endswith(_QUESTION_MARKS):
+            out = out[:-1] + "。"
+        return out.replace("？", "，").replace("?", "，")
+    return text.replace(bad, "")
+
+
+def _attach_tail(text: str, tail: str) -> str:
+    """把依恋后缀接上去；主体已经说过的话不再重复第二遍
+
+    「别熬了，闭上眼睛，我在。」+「我在，看到就回你。」= 「我在。我在，」
+    这种叠句是三类模板里都会踩的坑，所以重复的「我在」只留后缀里那次。
+    """
+    out = text or ""
+    if "我在" in tail:
+        idx = out.rfind("我在")
+        if idx >= 0:
+            out = out[:idx] + out[idx + 2:]
+            out = _tidy(out)
+    return out.rstrip("。") + "。" + tail
+
+
 def apply_attachment(text: str, attachment: str, seed: int = 0) -> str:
     """按依恋类型改写关怀话术
 
@@ -70,11 +114,29 @@ def apply_attachment(text: str, attachment: str, seed: int = 0) -> str:
     tweak = ATTACHMENT_TWEAK.get(attachment) or ATTACHMENT_TWEAK["未知"]
     out = text or ""
     for bad in tweak["禁忌"] or []:
-        out = out.replace(bad, "。").replace("。。", "。").strip("。")
+        out = _drop_bad(out, bad)
+    out = _tidy(out)
     tails = tweak["后缀"] or []
     if tails:
-        out = out.rstrip("。") + "。" + tails[seed % len(tails)]
-    return re.sub(r"。{2,}", "。", out).strip()
+        out = _attach_tail(out, tails[seed % len(tails)])
+    return _tidy(out)
+
+
+def split_messages(text: str, max_parts: int = 2) -> List[str]:
+    """把一条话术拆成多条短消息
+
+    微信里没人一次发三句：一条消息一个动作。但依恋后缀（「我在，看到就回你」）
+    必须留在最后一条，否则拆完就被截断了。
+    """
+    src = (text or "").strip()
+    if not src:
+        return []
+    parts = [p for p in re.split(r"(?<=[。！？!?])\s*", src) if p.strip()]
+    if len(parts) <= max_parts:
+        return parts
+    head = parts[:max_parts - 1]
+    head.append("".join(parts[max_parts - 1:]))
+    return head
 
 
 # 各关怀类型的话术模板。{nick} 称呼 / {detail} 具体事实 / {topic} 她关心的事
@@ -98,7 +160,7 @@ TEMPLATES: Dict[str, List[str]] = {
     "久未联系": [
         "{nick}，好几个小时没你的消息了，还好吗。",
         "刚看到{detail}，突然想起你。",
-        "在忙吗{nick}。不急，看到了回我一句就行。",
+        "{nick}，在忙就先忙。不急，看到了回我一句就行。",
         "{nick}？有点想你了。",
     ],
 }
@@ -200,9 +262,23 @@ def render(kind: str, nickname: str = "", detail: str = "",
         from scripts.persona.library import PersonaLibrary
         text = PersonaLibrary().apply_corrections(text, corrections)
 
+    text = _tidy(text)
     if estimate_tokens(text) > limit:
         text = truncate_to_tokens(text, limit)
     return text
+
+
+def render_messages(kind: str, max_parts: int = 2, **kwargs: Any) -> List[str]:
+    """渲染成「多条短消息」而不是一条长话术
+
+    一条消息一个动作：先接住，再说事，最后给确定性。三条糊成一条，
+    读起来就是客服公告。`max_parts` 控制最多拆几条，默认 2。
+
+    Returns:
+        ["...", "..."]；未知 kind 返回空列表（调用方据此决定不发）
+    """
+    text = render(kind, **kwargs)
+    return split_messages(text, max_parts=max_parts)
 
 
 def compose(kind: str, slug: str, data_dir: Optional[str] = None,

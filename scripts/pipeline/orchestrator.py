@@ -184,12 +184,17 @@ class Session:
 
     def after_reply(self, reply: str, user_message: str = "",
                     conversation_id: str = "", mood: Optional[str] = None,
-                    max_tasks: int = 8) -> Dict[str, Any]:
+                    max_tasks: int = 8,
+                    history: Optional[List[Dict[str, str]]] = None) -> Dict[str, Any]:
         """回复后处理：自检 + 入队 + 跑离线任务
+
+        Args:
+            history: 可选，本轮之前的对话（[{"role","text"}] 或 [("user","...")]）。
+                     传了才会跑多轮节奏检查——单条守门看不出「每轮都在问」。
 
         Returns:
             {"consistency": {"ok": bool, "issues": [...]},
-             "humanizer": {...}, "events": [...], "idle": {...}}
+             "humanizer": {...}, "rhythm": {...}, "events": [...], "idle": {...}}
         """
         report: Dict[str, Any] = {"consistency": {}, "humanizer": {}, "events": [], "idle": {}}
 
@@ -215,6 +220,13 @@ class Session:
                 report["density"] = assess(reply or "")
             except Exception:  # noqa: BLE001
                 pass
+            # 多轮节奏（M4.6）：单条都合格也可能连起来像 AI，只有给了历史才判
+            if history:
+                try:
+                    from scripts.style.dialogue import check_reply
+                    report["rhythm"] = check_reply(history, reply or "")
+                except Exception:  # noqa: BLE001
+                    pass
 
         # 用户信号与记忆采集：丢进离线队列，不让它在对话里占时间
         # （隐私.采集开关在 runner 的 memory.extract 里把关）

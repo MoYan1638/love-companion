@@ -127,7 +127,7 @@ love-companion/
     ├── memory/               # M2 记忆系统（store/extract/retrieve）
     ├── persona/              # M3a 人格克隆（parser/extract/library）+ M5 mirror.py
     ├── user/                 # M3b 恋人式用户理解（profile/guide）
-    ├── style/                # M4 语气贴合（voice）+ AI 腔守门（humanizer）
+    ├── style/                # M4 语气贴合（voice）+ AI 腔守门（humanizer）+ 密度（density）+ 多轮节奏（dialogue）
     ├── care/                 # M6 主动关怀（trigger/templates）
     ├── trends/               # M7a 趋势感知（sources/store）
     ├── multimodal/           # M7b 多模态（image_plan）
@@ -180,6 +180,7 @@ love-companion/
 | persona/（克隆） | M3a | 阶段 3 | P0 | ✅ |
 | user/ | M3b | 阶段 4 | P0 | ✅ |
 | style/ | M4 | 阶段 6 | P0 | ✅ |
+| style/dialogue.py（多轮节奏） | M4.6 | 阶段 6 补 | P0 | ✅ |
 | persona/mirror.py（融合 persona × user） | M5 | 阶段 5 | P0 | ✅ |
 | care/ | M6 | 阶段 7 | P0 | ✅ |
 | trends/ | M7a | 阶段 8 | P1 | ✅ |
@@ -225,6 +226,8 @@ python -m unittest discover -s tests -t .
 | `test_manager.py` | v1 能力回归：8 套预设逐字段一致、称呼回归、缓存隔离、坏 JSON 定位、方案与记忆 CRUD、CLI 冒烟；v2 schema 校验、预算红线、v1→v2 迁移无损与向下兼容 |
 | `test_v2.py` | M1 管线（队列/重试/死信）+ M2 记忆（采集脱敏/检索/衰减/数据主权） |
 | `test_v3.py` | M3b 用户理解（流式信号/两级分析/依恋识别/相处指南）+ M4 语气与 Humanizer 三层守门 |
+| `test_dialogue.py` | M4.6 多轮节奏（占比判据/连发长度/具体动作/呼应/收尾力）+ after_reply 接入 |
+| `test_care_stitching.py` | care 话术拼接回归（叠句/标点错位/一坨拆条） |
 | `test_v4.py` | M3a 人格克隆（三种导出排版/三层提取/merge/纠偏/版本回滚）+ M5 镜像（演化/共鸣/一致性/反馈）+ M6 关怀（三道闸门/四类信号/声线话术） |
 | `test_v5.py` | M7a 趋势（源路由/故障转移/提炼/预算）+ M7b 配图（闸门/风格/衔接）+ M7c（可解释/权重/遗忘/导出清除） |
 | `test_v6.py` | M8 联调：端到端一轮、模块开关生效、预算压测、全链路溯源与纠偏生效 |
