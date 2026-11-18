@@ -2,7 +2,7 @@
 
 > 依据：《LoveCompanion_开发与优化交接方案》（内部文档，未随仓库发布）
 > 里程碑拆解见 `../love-companion-v2-里程碑拆解.md`（开发者工作区文档，不在本仓库内）
-> 状态：**M0–M8 全部实现**（2026-09）。368 项回归测试全绿，主分支 `main`。
+> 状态：**M0–M8 全部实现**（2026-09，v2.5.0 迭代中）。404 项回归测试全绿，主分支 `main`。
 
 ## 实施记录（一句话）
 
@@ -23,6 +23,8 @@ v1 的 8 套人设、`/恋人…` 指令、manager.py API、数据目录全部�
 | 多轮节奏 | 几条消息连起来像不像两个人在说话（按占比判，不按连续判） | `scripts/style/dialogue.py` |
 | 判断层知识库 | 「对方为什么这样、这时该怎么接、什么时候该闭嘴」——判对不对，不判像不像 | `references/knowledge/` |
 | 军师模式 | 「这句怎么回 / 要不要继续」——顾问口吻，与扮演互斥，默认关闭 | `references/strategy/` |
+| 回复十条 | 发之前的通用规矩：先接情绪、接住上一句、说人话、控篇幅、不施压 | `references/reply-rules.md` |
+| 排版成型 | 去掉断句标点用空格隔开、超长按字数断条——外形像打字不像写作文 | `scripts/style/typography.py` |
 | 极简注入 | 「能不注入就不注入」的分级预算阶梯 | `scripts/pipeline/injector.py` |
 
 ## 设计取舍——为什么这样定，而不是那样
@@ -107,17 +109,18 @@ love-companion/
 ├── SKILL.md                  # 技能主文件（v1 指令体系 + v2 轻注入策略）
 ├── README.md
 ├── LICENSE
-├── package.json              # 版本真相源（2.4.6）+ dsh bundle 声明
+├── package.json              # 版本真相源（2.5.0）+ dsh bundle 声明
 ├── cordis.patch.yml          # dsh bundle 补丁层
 ├── dsh/
 │   └── index.js              # DSH 插件桥接：系统提示注入 + settings 命名空间（可选加载）
 ├── references/               # 人设预设（唯一数据源）、指令手册、教程
 │   ├── dialogue-playbook.md  # 对话标本（M4.6，判「长什么样」）
+│   ├── reply-rules.md        # 回复十条（v2.5，判「能不能发」，第 6、8 条可机械执行）
 │   ├── knowledge/            # 判断层知识库（v2.3，判「对不对」，9 份按需加载）
 │   └── strategy/             # 军师模式（v2.4，可选默认关闭，顾问口吻与扮演互斥）
 ├── docs/
 │   └── architecture.md       # 本文件
-├── tests/                    # 381 项回归，全部走 unittest（零依赖）
+├── tests/                    # 404 项回归，全部走 unittest（零依赖）
 │   ├── test_manager.py       # v1 能力 + v2 schema/迁移
 │   ├── test_v2.py            # M1 + M2
 │   ├── test_v3.py            # M3b + M4
@@ -131,6 +134,7 @@ love-companion/
 │   ├── test_care_stitching.py# 关怀话术拼接
 │   ├── test_knowledge.py     # 知识库结构、索引与合规
 │   ├── test_strategy.py      # 军师模式边界
+│   ├── test_typography.py    # 排版层：去断句标点 / 按字数断条
 │   └── test_release.py       # 许可证 / Windows 控制台 / 文档一致性（发布门禁）
 └── scripts/
     ├── manager.py            # v1 配置与记忆管理（保留，向后兼容）
@@ -148,7 +152,7 @@ love-companion/
     ├── memory/               # M2 记忆系统（store/extract/retrieve）
     ├── persona/              # M3a 人格克隆（parser/extract/library）+ M5 mirror.py
     ├── user/                 # M3b 恋人式用户理解（profile/guide）
-    ├── style/                # M4 语气贴合（voice）+ AI 腔守门（humanizer）+ 密度（density）+ 多轮节奏（dialogue）
+    ├── style/                # M4 语气贴合（voice）+ AI 腔守门（humanizer）+ 密度（density）+ 多轮节奏（dialogue）+ 排版（typography）
     ├── care/                 # M6 主动关怀（trigger/templates）
     ├── trends/               # M7a 趋势感知（sources/store）
     ├── multimodal/           # M7b 多模态（image_plan）
@@ -210,6 +214,7 @@ love-companion/
 | pipeline/orchestrator.py + audit.py（联调） | M8 | — | P0 | ✅ |
 | references/knowledge/（判断层知识库） | v2.3 | 阶段 6 补 | P1 | ✅ |
 | references/strategy/（军师模式） | v2.4 | 阶段 6 补 | P1 | ✅ |
+| style/typography.py + reply-rules（回复十条） | v2.5 | 阶段 6 补 | P1 | ✅ |
 
 ---
 
@@ -259,6 +264,7 @@ python -m unittest discover -s tests -t .
 | `test_density.py` | 密度校准：结构腔超了压、微标记少了补、恋人专项层、与硬红线互不干扰 |
 | `test_knowledge.py` | 知识库结构与索引完整、单份体量上限、三条硬规矩在文、危机文件不写具体热线号 |
 | `test_strategy.py` | 军师模式：默认关闭、与人设互斥、文档里的边界不能删 |
+| `test_typography.py` | 排版层：只去断句标点、语气零件（省略号/括号/引号）必须留、断条不丢字、默认开关与设置覆盖 |
 | `test_release.py` | 发布门禁：许可证一致、GBK 控制台不崩、版本号/合规声明/指令手册/测试数量四处不打架 |
 
 全程使用临时数据目录，不触碰用户真实数据。

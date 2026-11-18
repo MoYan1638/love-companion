@@ -7,10 +7,10 @@
 **给任何AI装上恋人模式 · 8种人设一键切换 · 开源免费**
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/deed.zh)
-[![Version](https://img.shields.io/badge/Version-2.4.6-ff69b4)]()
+[![Version](https://img.shields.io/badge/Version-2.5.0-ff69b4)]()
 [![Skill Type](https://img.shields.io/badge/Type-AI%20Skill-blueviolet)]()
 [![Presets](https://img.shields.io/badge/Presets-8-pink)]()
-[![Tests](https://img.shields.io/badge/Tests-381%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/Tests-404%20passing-brightgreen)]()
 
 *一个通用的 AI 恋人角色扮演技能包，即插即用，适配任意 AI Agent 框架*
 
@@ -102,6 +102,7 @@
 | 🎯 **军师模式（可选）** | 不是所有人都想要一个恋人——有人的诉求是「对方什么意思」「这句怎么回」「要不要继续」。默认关闭，开启后走顾问口吻：**不读人设、不读恋人记忆**。判断五步（情绪落地→事实拆分→利益判断→明确建议→行动收束）、七种主策略只选一个、三档口吻与三分支、投入失衡/多人选择/退出、可选关系档案。不教操控、不替人做决定、明确拒绝就停 |
 | 📚 **判断层知识库** | 九份按需加载：证据分级、依恋在对话里的样子、情绪承接分寸、冲突修复、边界与同意、危机转介、关系节奏与依赖、信号误读清单。管「对不对」，与管「像不像」的三道守门分工明确 |
 | 🗣️ **语气后处理** | 回复贴合对方语气，拦下中文恋爱对话里的 AI 腔（空洞安慰、客服式共情等）；再按**占比**检查多轮节奏——每轮都在问、每条都超 30 字、长句连发轰炸，都会被挡下 |
+| 📐 **回复十条** | 发之前的通用规矩：先接情绪不辩解、接住上一句、说人话不书面、可碎碎念但不油、引用只挑关键那条、**不带标点用空格隔开**、共情优先、控篇幅、不逼倾诉、克制不浮夸。其中两条能机械执行（去断句标点、按 40 字断条），其余靠读——`references/reply-rules.md` |
 | 🌤️ **趋势感知** | 把离线抓到的热点提炼成**一句能开口的话**，按「适不适合跟恋人聊」取舍 |
 | 🖼️ **多模态陪伴** | 发图时机判断 + 风格推导 + 图文衔接；拍什么由关心方式决定，不能拍什么由内容边界决定 |
 | 🎛️ **控制与安全感** | 可解释面板（回复为什么这么写）、模块开关、特征权重可调、遗忘关系、一键导出清除 |
@@ -199,13 +200,13 @@ love-companion/
 │   ├── 📁 memory/           # 六类记忆：采集 · 检索召回 · 衰减
 │   ├── 📁 persona/          # 人格克隆（解析/三层提取/人格库/镜像）+ v1 适配层
 │   ├── 📁 user/             # 恋人式用户理解 + 依恋规则引擎
-│   ├── 📁 style/            # 语气贴合 + AI 腔守门 + 密度校准 + 多轮节奏
+│   ├── 📁 style/            # 语气贴合 + AI 腔守门 + 密度校准 + 多轮节奏 + 排版（去标点/断条）
 │   ├── 📁 care/             # 主动关怀：三道闸门 + 话术模板
 │   ├── 📁 trends/           # 趋势感知：源路由 + 趋势知识库
 │   ├── 📁 multimodal/       # 配图计划
 │   ├── 📁 panel/            # 可解释面板 + 控制开关
 │   └── 📁 migrate/          # v1 → v2 无损迁移
-├── 📁 tests/                # 381 项回归测试（覆盖 v1 兼容与 v2 全流程）
+├── 📁 tests/                # 404 项回归测试（覆盖 v1 兼容与 v2 全流程）
 ├── 📁 docs/
 │   └── 📐 architecture.md   # 架构设计（在线/离线边界、设计取舍、数据可靠性）
 └── 📁 references/
@@ -213,6 +214,7 @@ love-companion/
     ├── 📖 instructions.md   # 详细使用教程
     ├── 🎭 personas.md       # 8套预设人设模板
     ├── 💬 dialogue-playbook.md  # 对话标本：十段整段对话 + 坏好对照 + 三条禁忌
+    ├── 📐 reply-rules.md     # 回复十条：内容 + 外形的总规矩（发之前过一遍）
     ├── 📚 knowledge/        # 知识库：为什么 + 分寸（9 份，按需加载）
     └── 🎯 strategy/         # 军师模式：判断 + 策略（5 份，可选，默认关闭）
 ```
@@ -367,7 +369,7 @@ python scripts/trends/store.py digest              # 查看趋势知识库摘要
 python -m unittest discover -s tests -t .
 ```
 
-381 项回归测试，覆盖 v1 兼容、v2 各模块、数据可靠性与 CLI 冒烟。
+404 项回归测试，覆盖 v1 兼容、v2 各模块、数据可靠性与 CLI 冒烟。
 
 ---
 
