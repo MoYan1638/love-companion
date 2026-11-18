@@ -108,9 +108,11 @@ class HumanizerTests(unittest.TestCase):
         result = scan("1. 早点睡\n2. 多喝热水\n3. 别想太多")
         self.assertIn("逐条编号", result["l2"])
 
-    def test_detects_missing_modal_particles(self):
+    def test_detects_written_style(self):
+        """书面腔两条路都要抓：缺语气词的长平句，或混进书面词。
+        短促有力的硬话（带「我/你」且短）不算书面，不该误伤。"""
         result = scan("根据目前的描述，建议你可以尝试调整作息并保持规律的饮食结构。")
-        self.assertTrue(any("语气词" in x for x in result["l3"]))
+        self.assertTrue(any(("语气词" in x) or ("书面词" in x) for x in result["l3"]))
 
     def test_clean_text_passes(self):
         self.assertTrue(is_clean("辛苦啦，早点睡呀～我在这儿呢。"))

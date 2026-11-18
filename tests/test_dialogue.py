@@ -88,9 +88,11 @@ class TestScan(unittest.TestCase):
         ids = {i["id"] for i in scan(BAD)["issues"]}
         self.assertIn("no_echo", ids)
 
-    def test_bad_dialogue_weak_ending(self):
+    def test_no_ending_heuristic(self):
+        """「最后一句必须最短」曾作为判据，但真人对谈里有力度的收尾经常并不最短，
+        这条会误伤十段标本里的八段，已移除——不留下站不住的规则"""
         ids = {i["id"] for i in scan(BAD)["issues"]}
-        self.assertIn("weak_ending", ids)
+        self.assertNotIn("weak_ending", ids)
 
     def test_burst_of_short_lines_allowed(self):
         """连发三条六字是节奏，不该报轰炸"""

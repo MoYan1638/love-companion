@@ -22,7 +22,8 @@
    「我会一直在」是宣言；「等你睡着了我再走」才是可被验证的事。
 5. **整段没接过对方一句原话**——真人对谈会捡词、会回嘴、会把对方刚说的字塞回
    句子里；各说各的，是最像客服的地方。
-6. **收尾那句不够短**——最后一句是全段最该用力的位置，长了就收不住。
+6. **整段凑不出一句短句**——真人聊天里「嗯」「知道了」「先睡」满地都是；
+   AI 永远在完整表达，最短的一句也有十几个字，节奏就一直是紧的。
 
 设计原则：
 - 只看形态，不看文风——不评价「这句好不好」，只报「这个节奏不对」
@@ -50,18 +51,26 @@ QUESTION_RATE_MAX = 0.6    # AI 发言里六成以上都在问 → 告警
 LONG_RATE_MAX = 0.6        # AI 发言里六成以上都超 30 字 → 告警
 BURST_MAX = 2              # 同一个人连发超过 2 条要看长度（见 BURST_LONG）
 BURST_LONG = 15            # 连发里平均超过 15 字，才算轰炸
-MONOLOGUE_RATIO = 0.78     # AI 占全段字数 78% 以上 → 提示（在自说自话）
+MONOLOGUE_RATIO = 0.85     # AI 占全段字数 85% 以上 → 提示（对方只在点头）
 MIN_AI_TURNS = 3           # 少于 3 条 AI 消息，占比类判据不够样本，不判
 
-# 具体动作：能被验证的、有时间或对象的承诺 / 祈使
+# 具体动作 / 具体性：能被验证的、有时间有对象有后果的承诺，或祈使动作
 ACTION_WORDS = (
     "我陪你", "我来", "我给你", "我帮你", "我等你", "我去", "我打给你", "我发你",
     "等我", "等着", "我带", "我买", "我修", "我弄", "我接", "我过来", "我盯着",
     "发你", "带你", "陪你", "守着", "放下", "躺好", "闭眼", "睡吧", "别熬",
-    "关灯", "过来", "再说一遍", "回你", "等你",
+    "关灯", "过来", "再说一遍", "回你", "等你", "等到", "归我",
 )
+_CONCRETE_NOUNS = (
+    "手机", "表", "电话", "作业", "课", "书包", "钥匙", "门口", "楼下", "家里",
+    "枕边", "灯", "闹钟", "被子", "药", "热水", "车", "票",
+)
+# 时间锚点，含中文数字（「等到三点」「十一点半」是标点里的具体，不是情绪词）
 TIME_ANCHORS = re.compile(r"(?:明天|今天|今晚|现在|马上|立刻|等下|等一下|待会|周末|"
-                          r"\d+\s*点|\d+\s*分钟|\d+\s*小时|一会儿|等会)")
+                          r"\d+\s*点|\d+\s*分钟|\d+\s*小时|一会儿|等会|"
+                          r"[一二三四五六七八九十两]{1,3}\s*点|"
+                          r"[一二三四五六七八九十两]{1,3}\s*分钟|"
+                          r"[一二三四五六七八九十两]{1,3}\s*个?小时|半小时)")
 
 # 虚词/高频字：判「有没有接对方的话」时要滤掉，否则「的」「我」也算呼应
 _STOP_CHARS = set("的了是我你他她它在不有就也都和跟把被给对从向这那么什么怎么"
@@ -122,11 +131,17 @@ def _run_stats(turns: List[Dict[str, str]], role: str) -> Tuple[int, float]:
 
 
 def has_action(text: str) -> bool:
-    """这句话里有没有一个可验证的具体动作（时间锚点 / 我+动词 / 祈使动作）"""
+    """这句话里有没有落到具体（时间锚点 / 动作词 / 具体物 / 祈使动作）
+
+    注意「具体」不等于「动词」：「不会让你一个人等到三点」一个动作词都没有，
+    但它比「我会一直陪着你」具体得多——因为有时间、有后果。
+    """
     src = text or ""
     if TIME_ANCHORS.search(src):
         return True
-    return any(w in src for w in ACTION_WORDS)
+    if any(w in src for w in ACTION_WORDS):
+        return True
+    return any(w in src for w in _CONCRETE_NOUNS)
 
 
 def _bag(text: str) -> set:
@@ -201,17 +216,14 @@ def scan(turns: Iterable[Any]) -> Dict[str, Any]:
         issues.append({"id": "monologue", "level": "info",
                        "msg": f"AI 占了 {ratio:.0%} 的字数，对方只是在点头"})
     if len(ai) >= MIN_AI_TURNS and action_hits == 0:
-        issues.append({"id": "no_action", "level": "warn",
-                       "msg": "整段没有一个具体动作或可验证承诺，全是情绪词"})
+        issues.append({"id": "no_action", "level": "info",
+                       "msg": "整段没有一句落到具体（时间/物件/动作），全是态度"})
     if len(ai) >= MIN_AI_TURNS and shortest > SHORT_LINE:
         issues.append({"id": "no_short_line", "level": "info",
                        "msg": f"最短的一句也有 {shortest} 字，缺一句能收住的短句"})
     if len(ai) >= MIN_AI_TURNS and echo_hits == 0:
         issues.append({"id": "no_echo", "level": "info",
                        "msg": "一次也没接对方原话，各说各的像客服"})
-    if len(ts) >= 4 and ts[-1]["role"] == "ai" and _chars(ts[-1]["text"]) > shortest:
-        issues.append({"id": "weak_ending", "level": "info",
-                       "msg": "最后一句不是最短的，收尾没用力"})
 
     warns = [i for i in issues if i["level"] == "warn"]
     return {

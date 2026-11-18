@@ -23,7 +23,9 @@ L1_WORDS: List[str] = [
     "我理解你的感受", "我完全理解", "我能理解", "我能感受到",
     "听到你这么说", "看到你说这些", "我能体会",
     # 空洞安慰（万能句，没有具体信息）
-    "抱抱你", "一切都会好起来的", "会好起来的", "都会过去的",
+    # 注意：这里**故意没有**「抱抱你」「亲亲」——恋人之间说抱抱是正当表达，
+    # 交给 density.py 管密度（COMMON_LOVE 里亲昵动作 per1k 2.0），不在这里硬禁。
+    "一切都会好起来的", "会好起来的", "都会过去的",
     "记得照顾好自己", "记得按时吃饭", "记得早点休息", "多喝热水",
     "别难过了", "别伤心了", "别想太多了", "开心一点",
     # 万能陪伴宣言
@@ -57,6 +59,12 @@ _CJK_PUNCT = re.compile(r"[。！？!?；;]")
 _EMOJI = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF]")
 _MODAL = ("呀", "呢", "嘛", "哦", "啦", "~", "～")
 
+# 书面词：这些词本身没错，但出现在恋人对话里就是「在写材料」
+_WRITTEN_WORDS: List[str] = [
+    "根据", "描述", "建议", "尝试", "保持", "调整", "结构", "规律", "目前",
+    "进行", "存在", "方面", "因素", "措施", "方式方法", "同时", "以及",
+]
+
 
 def scan(text: str) -> Dict[str, Any]:
     """检测一段回复的 AI 写作特征"""
@@ -75,8 +83,13 @@ def scan(text: str) -> Dict[str, Any]:
         l3.append(f"句子过长（平均 {avg_len:.0f} 字，恋人对话宜短）")
     if emoji_count > 2:
         l3.append(f"emoji 过多（{emoji_count} 个）")
-    if len(text) >= 20 and modal_count == 0:
+    # 缺语气词只在「长 + 平 + 没有你我」时才算书面：短促有力的硬话本来就不带语气词，
+    # 「我撑不住了，但我在」加个「呀」反而软掉了。
+    if len(text) >= 30 and modal_count == 0 and avg_len > 18 and not re.search(r"[我你]", text):
         l3.append("缺少语气词，像书面说明")
+    written = [w for w in _WRITTEN_WORDS if w in text]
+    if written:
+        l3.append(f"书面词混进口语（{'/'.join(written[:3])}）")
     if text.count("，") > len(sentences) * 3:
         l3.append("逗号密度过高，长句堆砌")
     # 每条消息都带 emoji 也不自然
