@@ -1,6 +1,6 @@
 {
   "name": "love-companion",
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "AI 陪伴技能：人设配置、长时记忆、情绪识别与反馈、多轮情感对话",
   "type": "module",
   "main": "dsh/index.js",

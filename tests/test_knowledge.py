@@ -92,5 +92,31 @@ class TestKnowledgeBase(unittest.TestCase):
         self.assertIsNone(re.search(r"\d{7,}", text), "出现疑似具体号码")
 
 
+class TestGenericToEveryone(unittest.TestCase):
+    """发布物是给所有人的，不能混进某一段具体关系的私货"""
+
+    PRIVATE = ("阿岁", "许楹", "贾思颖", "范俊杰", "三蹦子")
+
+    def test_no_private_names_in_references(self):
+        for path in (ROOT / "references").rglob("*.md"):
+            with self.subTest(file=path.name):
+                text = path.read_text(encoding="utf-8")
+                for name in self.PRIVATE:
+                    self.assertNotIn(name, text, f"{path} 混入个人化专名「{name}」")
+
+    def test_generic_note_present(self):
+        for path in (KB / "00-索引与用法.md", ROOT / "references" / "strategy" / "00-导读与模式边界.md"):
+            with self.subTest(file=path.name):
+                text = path.read_text(encoding="utf-8")
+                self.assertIn("通用性约定", text)
+
+    def test_user_role_is_not_gendered(self):
+        """「她」曾被用来指用户，等于默认用户是女性。知识库与军师模式里应已清空"""
+        for path in list(KB.glob("*.md")) + list((ROOT / "references" / "strategy").glob("*.md")):
+            with self.subTest(file=path.name):
+                text = path.read_text(encoding="utf-8")
+                self.assertNotIn("她", text, f"{path.name} 仍有「她」指代用户")
+
+
 if __name__ == "__main__":
     unittest.main()
