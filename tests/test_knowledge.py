@@ -137,16 +137,22 @@ class TestGenericToEveryone(unittest.TestCase):
     def test_students_are_not_treated_as_minors(self):
         """「不预设阶段」容易被写成「回避学生场景」，但 18+ 门槛和在校生并不冲突：
         大学生、复读生、考研与专升本、职校生基本都成年，是主要用户群。
-        钉住两件事：约定里写明 18+ 口径，且 playbook 有场景替换说明。"""
+        同时年龄必须按人确认、不按身份归类——应届高三有一部分未满 18。
+        钉住三件事：约定写明 18+ 口径、写明按人确认、playbook 有场景替换说明。"""
         for path in (KB / "00-索引与用法.md", ROOT / "references" / "strategy" / "00-导读与模式边界.md"):
             with self.subTest(file=path.name):
                 text = path.read_text(encoding="utf-8")
                 self.assertIn("别把「学生」当成「未成年」", text)
                 self.assertIn("18 周岁", text)
+                self.assertIn("按人确认、不按身份归类", text)
 
         play = (ROOT / "references" / "dialogue-playbook.md").read_text(encoding="utf-8")
         self.assertIn("场景说明", play)
-        self.assertIn("18 岁是唯一的硬门槛", play)
+        self.assertIn("按人确认、不按身份归类", play)
+        self.assertIn("应届高三", play)
+        # 两类在校用户各有各的具体动作，不能只写校园或只写上班族
+        self.assertIn("大学生", play)
+        self.assertIn("复读", play)
 
     def test_user_role_is_not_gendered(self):
         """「她」曾被用来指用户，等于默认用户是女性。知识库与军师模式里应已清空"""

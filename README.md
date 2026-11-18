@@ -7,7 +7,7 @@
 **给任何AI装上恋人模式 · 8种人设一键切换 · 开源免费**
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/deed.zh)
-[![Version](https://img.shields.io/badge/Version-2.4.3-ff69b4)]()
+[![Version](https://img.shields.io/badge/Version-2.4.4-ff69b4)]()
 [![Skill Type](https://img.shields.io/badge/Type-AI%20Skill-blueviolet)]()
 [![Presets](https://img.shields.io/badge/Presets-8-pink)]()
 [![Tests](https://img.shields.io/badge/Tests-368%20passing-brightgreen)]()
@@ -69,8 +69,9 @@
 > 以及发出去之前的三句话自检。
 >
 > 场景可以整段替换：校园的「学校今天有点烦」换成「项目今天有点烦」一样成立，反之亦然。
-> 唯一的硬门槛是**已满 18 周岁**——成年学生（大学生、复读生、考研与专升本、职校生）
-> 是最常见的使用者，不必回避校园，也不用把所有人当成上班族。
+> 唯一的硬门槛是**已满 18 周岁**，按人确认、不按身份归类——大学生、复读生、考研与专升本、
+> 职校生基本都已成年；应届高三有一部分未满 18，没确认过不能启用。
+> 所以不必回避校园场景，也不用把所有人当成上班族。
 
 ---
 
