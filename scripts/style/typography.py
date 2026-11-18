@@ -23,9 +23,11 @@
    说得多就多发几条，不把三句塞进一条。超过上限就断开，优先在空格处断
    （那是上一句的断点），其次硬切。四十字一条读起来像通知，不像聊天。
 
-3. **短回应可以带一个句号**（第 6 条的例外）
-   「哦哦。」「嗯嗯。」「呃。」——有人习惯在极短回应末尾点一个句号，
-   那是语气（收得干净、有点冷淡），不是作文感。默认**不加**，要加靠设置开。
+3. **认真收住的那一句可以留一个句号**（第 6 条的情绪例外）
+   「哦哦。」「嗯嗯。」这类极短回应的句号是冷淡的语气；「没事。」「嗯对。」「算了。」
+   这类**认真收住的短句**末尾那个句号是情绪——安抚、下定论、道歉的时候，
+   点一下收住，比空着更像真人。判定：整条除了末尾一个句号没有别的断句标点。
+   日常闲聊还是全空格；句号是**情绪开关**，不是默认格式。
 
 设计原则：
 - **只改外形，不改语义**：删标点不改字，断句不改顺序
@@ -71,26 +73,42 @@ DEFAULT_HARD_MAX = 20
 SHORT_REPLY_MAX = 3
 _SHORT_STOP = re.compile(r"^([^。，、；：！？,.;:!?\s]{1,%d})。$" % SHORT_REPLY_MAX)
 
+# 情绪句号：整条**只有末尾一个句号**、句中没有别的断句标点时，那个句号
+# 可以是语气不是断句——「没事。」「嗯对。」「算了。」这种认真收住的一句。
+# 句中还有标点（「我在。你说。」「没事的，我没怪你」）就不算，照常清。
+def _emotion_stop(src: str) -> bool:
+    if not src.endswith("。"):
+        return False
+    body = src[:-1]
+    return bool(body) and not any(ch in TERMINAL for ch in body)
 
-def strip_punct(text: str, keep_short_stop: bool = False) -> str:
+
+def strip_punct(text: str, keep_short_stop: bool = False,
+                keep_emotion_stop: bool = True) -> str:
     """去掉断句标点，用空格隔开（第 6 条）
 
-    `keep_short_stop=True` 时保留「哦哦。」「嗯嗯。」这类**短回应的末尾句号**——
-    那是语气不是断句，删了会变成「哦哦」，冷淡的分寸差一点。
-    只认「整条 ≤3 字 + 只有一个末尾句号」，多一个字或句中还有标点就不算。
+    `keep_short_stop=True` 时额外保留「哦哦。」「嗯嗯。」这类**极短回应的末尾句号**。
+    `keep_emotion_stop=True`（默认开）时保留「没事。」「嗯对。」「算了。」这类
+    **认真收住的短句**的末尾句号——那是情绪开关，不是断句；日常闲聊本来就不带，
+    所以保留它不会破坏无标点的常态，反而是把写话那一层特意点的句号留住。
+    句中还有别的断句标点就不算，照常清空格。
 
     >>> strip_punct("我在。你说。")
     '我在 你说'
     >>> strip_punct("不是。算了。")
     '不是 算了'
+    >>> strip_punct("没事。")
+    '没事。'
+    >>> strip_punct("没事。", keep_emotion_stop=False)
+    '没事'
     >>> strip_punct("哦哦。", keep_short_stop=True)
     '哦哦。'
-    >>> strip_punct("哦哦。", keep_short_stop=False)
-    '哦哦'
     """
     src = (text or "").strip()
     if not src:
         return ""
+    if keep_emotion_stop and _emotion_stop(src):
+        return src
     if keep_short_stop and _SHORT_STOP.match(src):
         return src
     out = "".join(" " if ch in TERMINAL else ch for ch in src)
@@ -157,7 +175,8 @@ def _hard_split(word: str, max_chars: int) -> List[str]:
 
 def audit(text: str, max_chars: int = DEFAULT_MAX_CHARS,
           hard_max: int = DEFAULT_HARD_MAX,
-          keep_short_stop: bool = False) -> Dict[str, Any]:
+          keep_short_stop: bool = False,
+          keep_emotion_stop: bool = True) -> Dict[str, Any]:
     """体检：这条回复还差哪几条规矩（只报 6、8 两条，其余是语义层，机械判不了）
 
     第 8 条判的是「原文一条有多长」，不是断条后有多长——断条是补救手段，
@@ -165,19 +184,26 @@ def audit(text: str, max_chars: int = DEFAULT_MAX_CHARS,
 
     超过目标但没过硬上限的，记进 `notes` 提醒一下，不算违规——
     日常十条里九条是短句，偶尔一条长点，卡死会显得像机器人。
+
+    「没事。」这种只有一个末尾句号的也不算违规，记 note：那是情绪开关，
+    认真收住的一句可以留；但日常不该带，所以留了要被提醒一句「别每条都带」。
     """
     src = (text or "").strip()
-    if keep_short_stop and _SHORT_STOP.match(src):
-        punct = []
+    emotion = keep_emotion_stop and _emotion_stop(src)
+    if (keep_short_stop and _SHORT_STOP.match(src)) or emotion:
+        punct: List[str] = []
     else:
         punct = [ch for ch in src if ch in TERMINAL]
-    flat = strip_punct(src, keep_short_stop=keep_short_stop).rstrip("。")
+    flat = strip_punct(src, keep_short_stop=keep_short_stop,
+                       keep_emotion_stop=keep_emotion_stop).rstrip("。")
     chunks = split_by_length(flat, max_chars, hard_max=hard_max)
     longest = max((len(c) for c in chunks), default=0)
     issues: List[str] = []
     notes: List[str] = []
     if punct:
         issues.append(f"带了 {len(punct)} 处断句标点（第 6 条）")
+    elif emotion:
+        notes.append("末尾留了一个句号：认真收住的一句可以，日常闲聊别带")
     if len(flat) > hard_max:
         issues.append(
             f"整条 {len(flat)} 字，超过硬上限 {hard_max}，会断成 {len(chunks)} 条（第 8 条）")
@@ -198,7 +224,7 @@ def audit(text: str, max_chars: int = DEFAULT_MAX_CHARS,
 def style_config(data_dir: Optional[str] = None) -> Dict[str, Any]:
     """读 `回复风格` 设置；读不到就用默认值，绝不抛异常打断发送"""
     cfg = {"无标点": True, "单条字数上限": DEFAULT_MAX_CHARS,
-           "单条硬上限": DEFAULT_HARD_MAX, "短回应句号": False}
+           "单条硬上限": DEFAULT_HARD_MAX, "短回应句号": False, "情绪句号": True}
     try:
         from scripts.core import settings as core_settings
         got = (core_settings.load(data_dir) or {}).get("回复风格") or {}
@@ -217,11 +243,12 @@ def format_reply(text: str, no_punct: Optional[bool] = None,
                  max_chars: Optional[int] = None,
                  hard_max: Optional[int] = None,
                  short_stop: Optional[bool] = None,
+                 emotion_stop: Optional[bool] = None,
                  data_dir: Optional[str] = None) -> List[str]:
     """一条回复 → 若干条可发送消息
 
-    `no_punct` / `max_chars` / `hard_max` / `short_stop` 传 None 时读设置；
-    显式传值则以此为准（测试与临时覆盖用）。
+    `no_punct` / `max_chars` / `hard_max` / `short_stop` / `emotion_stop`
+    传 None 时读设置；显式传值则以此为准（测试与临时覆盖用）。
     """
     cfg = style_config(data_dir)
     if no_punct is None:
@@ -232,7 +259,10 @@ def format_reply(text: str, no_punct: Optional[bool] = None,
         hard_max = cfg["单条硬上限"]
     if short_stop is None:
         short_stop = bool(cfg["短回应句号"])
-    src = (strip_punct(text, keep_short_stop=short_stop) if no_punct
+    if emotion_stop is None:
+        emotion_stop = bool(cfg["情绪句号"])
+    src = (strip_punct(text, keep_short_stop=short_stop,
+                       keep_emotion_stop=emotion_stop) if no_punct
            else re.sub(r"\s+", " ", (text or "")).strip())
     return split_by_length(src, max_chars, hard_max=hard_max)
 

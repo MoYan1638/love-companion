@@ -103,9 +103,10 @@ def shape(text: str, level: str = "标准", nickname: str = "",
         pieces = [_soften(p) for p in pieces]
 
     # 收口：本层不生产断句标点，输入带进来的也不许漏出去
-    # （拆句时逗号/句号会留在段尾，形状已经定了，这里只清外形）
+    # （拆句时逗号/句号会留在段尾，形状已经定了，这里只清外形。
+    #   情绪句号在这里也清——那是写话层自己的决定，机械改写不留。）
     from scripts.style import typography  # 局部导入避免模块级循环依赖
-    return [typography.strip_punct(p) for p in pieces]
+    return [typography.strip_punct(p, keep_emotion_stop=False) for p in pieces]
 
 
 def _add_modal(sentence: str, nickname: str = "", night: bool = False) -> str:

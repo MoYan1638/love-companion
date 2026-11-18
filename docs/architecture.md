@@ -2,7 +2,7 @@
 
 > 依据：《LoveCompanion_开发与优化交接方案》（内部文档，未随仓库发布）
 > 里程碑拆解见 `../love-companion-v2-里程碑拆解.md`（开发者工作区文档，不在本仓库内）
-> 状态：**M0–M8 全部实现**（2026-09，v2.5.3 迭代中）。431 项回归测试全绿，主分支 `main`。
+> 状态：**M0–M8 全部实现**（2026-09，v2.5.4 迭代中）。436 项回归测试全绿，主分支 `main`。
 
 ## 实施记录（一句话）
 
@@ -114,7 +114,7 @@ love-companion/
 ├── SKILL.md                  # 技能主文件（v1 指令体系 + v2 轻注入策略）
 ├── README.md
 ├── LICENSE
-├── package.json              # 版本真相源（2.5.3）+ dsh bundle 声明
+├── package.json              # 版本真相源（2.5.4）+ dsh bundle 声明
 ├── cordis.patch.yml          # dsh bundle 补丁层
 ├── dsh/
 │   └── index.js              # DSH 插件桥接：系统提示注入 + settings 命名空间（可选加载）
@@ -125,7 +125,7 @@ love-companion/
 │   └── strategy/             # 军师模式（v2.4，可选默认关闭，顾问口吻与扮演互斥）
 ├── docs/
 │   └── architecture.md       # 本文件
-├── tests/                    # 431 项回归，全部走 unittest（零依赖）
+├── tests/                    # 436 项回归，全部走 unittest（零依赖）
 │   ├── test_manager.py       # v1 能力 + v2 schema/迁移
 │   ├── test_v2.py            # M1 + M2
 │   ├── test_v3.py            # M3b + M4

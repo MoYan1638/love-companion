@@ -171,12 +171,17 @@ class TestShortReplyStop(unittest.TestCase):
             with self.subTest(src=src):
                 self.assertEqual(typography.strip_punct(src, keep_short_stop=True), src)
 
-    def test_short_reply_default_drops_stop(self):
-        self.assertEqual(typography.strip_punct("哦哦。"), "哦哦")
+    def test_short_reply_default_keeps_stop_now(self):
+        """情绪句号默认开之后，「哦哦。」属于「只剩末尾一个句号」，跟着被留；
+        要回到旧的死规矩，把情绪句号关掉即可"""
+        self.assertEqual(typography.strip_punct("哦哦。"), "哦哦。")
+        self.assertEqual(typography.strip_punct("哦哦。", keep_emotion_stop=False), "哦哦")
 
     def test_not_short_enough_is_still_stripped(self):
-        """超过 4 字就不是短回应了，句号该去"""
-        out = typography.strip_punct("我知道了。", keep_short_stop=True)
+        """超过 4 字就不是短回应了；短回应标志位自己管不了它，
+        这里关掉情绪句号单独验短回应这一条的边界"""
+        out = typography.strip_punct("我知道了。", keep_short_stop=True,
+                                     keep_emotion_stop=False)
         self.assertEqual(out, "我知道了")
         self.assertNotIn("。", out)
 
@@ -189,7 +194,8 @@ class TestShortReplyStop(unittest.TestCase):
         r = typography.audit("哦哦。", keep_short_stop=True)
         self.assertTrue(r["ok"], r["issues"])
         self.assertEqual(r["punct"], 0)
-        self.assertFalse(typography.audit("哦哦。")["ok"])
+        # 情绪句号默认开会把「哦哦。」也当情绪例外；关掉它才是严格口径
+        self.assertFalse(typography.audit("哦哦。", keep_emotion_stop=False)["ok"])
 
     def test_format_reply_reads_setting(self):
         data_dir = tempfile.mkdtemp()
@@ -199,6 +205,47 @@ class TestShortReplyStop(unittest.TestCase):
         self.assertEqual(typography.format_reply("嗯嗯。", data_dir=data_dir), ["嗯嗯。"])
 
 
+class TestEmotionStop(unittest.TestCase):
+    """情绪句号：第 6 条的情绪例外，默认开
+
+    「没事。」「嗯对。」「算了。」——认真收住的一句，末尾那个句号是情绪开关：
+    安抚、下定论、道歉的时候点一下，比空着更像真人。但只有**句中干干净净、
+    只剩末尾一个句号**才算；句中还有标点就是断句，照常清。
+    """
+
+    def test_emotion_stop_kept_by_default(self):
+        for src in ("没事。", "嗯对。", "算了。", "考试加油。"):
+            with self.subTest(src=src):
+                self.assertEqual(typography.strip_punct(src), src)
+
+    def test_emotion_stop_can_be_disabled(self):
+        self.assertEqual(typography.strip_punct("没事。", keep_emotion_stop=False), "没事")
+
+    def test_mid_sentence_punct_still_stripped(self):
+        """句中还有标点就是断句，整条照常清——情绪例外不许变后门"""
+        for src in ("我在。你说。", "没事的，我没怪你", "嗯。好。"):
+            with self.subTest(src=src):
+                out = typography.strip_punct(src)
+                self.assertNotIn("。", out)
+                self.assertNotIn("，", out)
+
+    def test_audit_passes_with_note(self):
+        """情绪句号不算违规，但留了要被提醒「别每条都带」"""
+        r = typography.audit("没事。")
+        self.assertTrue(r["ok"], r["issues"])
+        self.assertTrue(any("句号" in n for n in r["notes"]), r)
+        r2 = typography.audit("我在。你说。")
+        self.assertFalse(r2["ok"], r2["issues"])
+
+    def test_format_reply_keeps_and_reads_setting(self):
+        self.assertEqual(typography.format_reply("没事。"), ["没事。"])
+        data_dir = tempfile.mkdtemp()
+        with open(os.path.join(data_dir, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"回复风格": {"无标点": True, "情绪句号": False}},
+                      fh, ensure_ascii=False)
+        self.assertEqual(typography.format_reply("没事。", data_dir=data_dir), ["没事"])
+
+
 class TestSettingsWiring(unittest.TestCase):
     def test_template_has_reply_style(self):
         style = schema.settings_template()["回复风格"]
@@ -206,6 +253,7 @@ class TestSettingsWiring(unittest.TestCase):
         self.assertEqual(style["单条字数上限"], 12, "一条十字顶天，留两字余量给语气词")
         self.assertEqual(style["单条硬上限"], 20, "硬上限才是真的必须拆的线")
         self.assertFalse(style["短回应句号"], "短回应默认不加句号，要加自己开")
+        self.assertTrue(style["情绪句号"], "情绪到了留一个句号是默认允许的，写话那一层自己定")
 
     def test_legacy_settings_get_migrated(self):
         """老 settings.json 存的是旧默认 40 字，深合并会盖掉新默认——要迁到 12"""

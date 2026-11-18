@@ -1,4 +1,4 @@
-// love-companion - DSH plugin bridge (v2.5.3)
+// love-companion - DSH plugin bridge (v2.5.4)
 // (c) 2026 MoYan1638
 // https://github.com/MoYan1638/love-companion
 // Licensed under the CC BY-NC 4.0 License. See the LICENSE file for details.
