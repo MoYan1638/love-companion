@@ -134,6 +134,20 @@ class TestGenericToEveryone(unittest.TestCase):
                 text = path.read_text(encoding="utf-8")
                 self.assertIn("通用性约定", text)
 
+    def test_students_are_not_treated_as_minors(self):
+        """「不预设阶段」容易被写成「回避学生场景」，但 18+ 门槛和在校生并不冲突：
+        大学生、复读生、考研与专升本、职校生基本都成年，是主要用户群。
+        钉住两件事：约定里写明 18+ 口径，且 playbook 有场景替换说明。"""
+        for path in (KB / "00-索引与用法.md", ROOT / "references" / "strategy" / "00-导读与模式边界.md"):
+            with self.subTest(file=path.name):
+                text = path.read_text(encoding="utf-8")
+                self.assertIn("别把「学生」当成「未成年」", text)
+                self.assertIn("18 周岁", text)
+
+        play = (ROOT / "references" / "dialogue-playbook.md").read_text(encoding="utf-8")
+        self.assertIn("场景说明", play)
+        self.assertIn("18 岁是唯一的硬门槛", play)
+
     def test_user_role_is_not_gendered(self):
         """「她」曾被用来指用户，等于默认用户是女性。知识库与军师模式里应已清空"""
         for path in list(KB.glob("*.md")) + list((ROOT / "references" / "strategy").glob("*.md")):
