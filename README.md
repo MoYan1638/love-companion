@@ -7,10 +7,10 @@
 **给任何AI装上恋人模式 · 8种人设一键切换 · 开源免费**
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/deed.zh)
-[![Version](https://img.shields.io/badge/Version-2.4.5-ff69b4)]()
+[![Version](https://img.shields.io/badge/Version-2.4.6-ff69b4)]()
 [![Skill Type](https://img.shields.io/badge/Type-AI%20Skill-blueviolet)]()
 [![Presets](https://img.shields.io/badge/Presets-8-pink)]()
-[![Tests](https://img.shields.io/badge/Tests-376%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/Tests-381%20passing-brightgreen)]()
 
 *一个通用的 AI 恋人角色扮演技能包，即插即用，适配任意 AI Agent 框架*
 
@@ -189,6 +189,9 @@ love-companion/
 ├── 📄 SKILL.md              # 技能主文件（核心逻辑与架构）
 ├── 📄 README.md             # 项目说明（你正在看）
 ├── 📄 LICENSE               # CC BY-NC 4.0 许可证
+├── 📄 package.json          # 版本真相源 + dsh bundle 声明
+├── 📄 cordis.patch.yml      # dsh bundle 补丁层
+├── 📁 dsh/                  # DSH 插件桥接（系统提示注入 + settings 命名空间，可选加载）
 ├── 📁 scripts/
 │   ├── 🐍 manager.py        # v1 配置与记忆管理（全部保留，向后兼容）
 │   ├── 📁 core/             # schema · 设置读取 · 数据可靠性 · 隐私脱敏 · 内容边界
@@ -202,7 +205,7 @@ love-companion/
 │   ├── 📁 multimodal/       # 配图计划
 │   ├── 📁 panel/            # 可解释面板 + 控制开关
 │   └── 📁 migrate/          # v1 → v2 无损迁移
-├── 📁 tests/                # 376 项回归测试（覆盖 v1 兼容与 v2 全流程）
+├── 📁 tests/                # 381 项回归测试（覆盖 v1 兼容与 v2 全流程）
 ├── 📁 docs/
 │   └── 📐 architecture.md   # 架构设计（在线/离线边界、设计取舍、数据可靠性）
 └── 📁 references/
@@ -364,13 +367,14 @@ python scripts/trends/store.py digest              # 查看趋势知识库摘要
 python -m unittest discover -s tests -t .
 ```
 
-376 项回归测试，覆盖 v1 兼容、v2 各模块、数据可靠性与 CLI 冒烟。
+381 项回归测试，覆盖 v1 兼容、v2 各模块、数据可靠性与 CLI 冒烟。
 
 ---
 
 ## ⚠️ 免责声明
 
 - 本项目为 **AI 角色扮演工具**，所有对话均为 AI 生成，**不代表真实人际关系**。
+- **仅限已满 18 周岁**。启用前需确认年龄（`settings.json` → `合规.已满18周岁确认`），未确认时不加载任何人设与记忆。
 - 请勿将 AI 陪伴**替代真实社交**或**专业心理辅导**。
 - 如您正在经历心理健康困扰，请寻求专业帮助。
 - 本项目遵循 CC BY-NC 4.0 许可证，使用者需自行承担使用风险。

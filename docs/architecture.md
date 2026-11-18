@@ -20,6 +20,9 @@ v1 的 8 套人设、`/恋人…` 指令、manager.py API、数据目录全部�
 | 趋势感知 | 把离线抓到的热点提炼成一句能开口的话题，按可聊度取舍 | `scripts/trends/` |
 | 语气控制 | 回复贴合对方语气，并拦下中文恋爱对话里的 AI 腔 | `scripts/style/` |
 | 双向镜像 | 关系阶段、共鸣、演化建模、一致性自检、元认知反馈 | `scripts/persona/mirror.py` |
+| 多轮节奏 | 几条消息连起来像不像两个人在说话（按占比判，不按连续判） | `scripts/style/dialogue.py` |
+| 判断层知识库 | 「对方为什么这样、这时该怎么接、什么时候该闭嘴」——判对不对，不判像不像 | `references/knowledge/` |
+| 军师模式 | 「这句怎么回 / 要不要继续」——顾问口吻，与扮演互斥，默认关闭 | `references/strategy/` |
 | 极简注入 | 「能不注入就不注入」的分级预算阶梯 | `scripts/pipeline/injector.py` |
 
 ## 设计取舍——为什么这样定，而不是那样
@@ -34,6 +37,9 @@ v1 的 8 套人设、`/恋人…` 指令、manager.py API、数据目录全部�
 | 追求 13+ 平台的抓取覆盖与安装器 | 恋人陪伴不需要全网接入能力，只需要**一句能开口的话**；平台清单没人看得懂也没人用 | 只留 3 个真用得上的源；核心是 `talkability()` 可聊度 + `opener()` 聊天切口，而非平台数量 |
 | 沿用英文写作的 AI 特征词表 | 英文论文腔的词汇表搬到中文恋爱对话几乎无用 | 词表换成**中文恋爱对话**真正的 AI 腔：空洞安慰、客服式共情、替用户断言情绪、万能陪伴宣言 |
 | 按通用审美构图来配图 | 恋人发图不是配图，是**把此刻的生活递给对方看** | 拍什么由 v1「关心方式」决定，能拍多近由「亲密尺度」决定，不能拍什么由「内容边界」决定 |
+| 把所有恋爱知识塞进一份大文档，需要时整篇注入 | 整篇进上下文，语气会立刻变成心理咨询师——开始分析、开始解释、开始给框架 | `references/knowledge/` 九份**按需加载、一次只读一份**；每份都标注「什么时候读」 |
+| 把「对方什么意思 / 这句怎么回」也交给恋人模式回答 | 用恋人的人设给用户的现实关系提建议，既不专业，还会把私下说过的话变成判断依据 | 另开 `references/strategy/` 军师模式：不读 persona、不读关系记忆、**默认关闭**，与人设互斥 |
+| 多轮节奏按「连续 N 条短句」判 | 真人聊天本来就连发，按连续判会把正常对话全判成轰炸（标本误伤 8/10） | 按**占比**判（问句率、长句率、独白率），短句连发不扣分；判据只留能拿真实样本复核的 |
 
 **love-companion 的硬性需求**（方案原文，必须守）：
 
@@ -101,19 +107,31 @@ love-companion/
 ├── SKILL.md                  # 技能主文件（v1 指令体系 + v2 轻注入策略）
 ├── README.md
 ├── LICENSE
+├── package.json              # 版本真相源（2.4.6）+ dsh bundle 声明
+├── cordis.patch.yml          # dsh bundle 补丁层
+├── dsh/
+│   └── index.js              # DSH 插件桥接：系统提示注入 + settings 命名空间（可选加载）
 ├── references/               # 人设预设（唯一数据源）、指令手册、教程
 │   ├── dialogue-playbook.md  # 对话标本（M4.6，判「长什么样」）
 │   ├── knowledge/            # 判断层知识库（v2.3，判「对不对」，9 份按需加载）
 │   └── strategy/             # 军师模式（v2.4，可选默认关闭，顾问口吻与扮演互斥）
 ├── docs/
 │   └── architecture.md       # 本文件
-├── tests/
-│   ├── test_manager.py       # v1 能力 + v2 schema/迁移（20 项）
+├── tests/                    # 381 项回归，全部走 unittest（零依赖）
+│   ├── test_manager.py       # v1 能力 + v2 schema/迁移
 │   ├── test_v2.py            # M1 + M2
 │   ├── test_v3.py            # M3b + M4
 │   ├── test_v4.py            # M3a + M5 + M6
 │   ├── test_v5.py            # M7a + M7b + M7c
-│   └── test_v6.py            # M8 联调与压测
+│   ├── test_v6.py            # M8 联调与压测
+│   ├── test_v7.py            # 注入预算 / 检索 / 边界
+│   ├── test_v8.py            # 端到端与回归
+│   ├── test_density.py       # 文风密度校准
+│   ├── test_dialogue.py      # 多轮节奏守门 M4.6
+│   ├── test_care_stitching.py# 关怀话术拼接
+│   ├── test_knowledge.py     # 知识库结构、索引与合规
+│   ├── test_strategy.py      # 军师模式边界
+│   └── test_release.py       # 许可证 / Windows 控制台 / 文档一致性（发布门禁）
 └── scripts/
     ├── manager.py            # v1 配置与记忆管理（保留，向后兼容）
     ├── core/
@@ -190,6 +208,8 @@ love-companion/
 | multimodal/ | M7b | 阶段 9 | P1 | ✅ |
 | panel/ | M7c | 阶段 10 | P1 | ✅ |
 | pipeline/orchestrator.py + audit.py（联调） | M8 | — | P0 | ✅ |
+| references/knowledge/（判断层知识库） | v2.3 | 阶段 6 补 | P1 | ✅ |
+| references/strategy/（军师模式） | v2.4 | 阶段 6 补 | P1 | ✅ |
 
 ---
 
@@ -234,5 +254,11 @@ python -m unittest discover -s tests -t .
 | `test_v4.py` | M3a 人格克隆（三种导出排版/三层提取/merge/纠偏/版本回滚）+ M5 镜像（演化/共鸣/一致性/反馈）+ M6 关怀（三道闸门/四类信号/声线话术） |
 | `test_v5.py` | M7a 趋势（源路由/故障转移/提炼/预算）+ M7b 配图（闸门/风格/衔接）+ M7c（可解释/权重/遗忘/导出清除） |
 | `test_v6.py` | M8 联调：端到端一轮、模块开关生效、预算压测、全链路溯源与纠偏生效 |
+| `test_v7.py` | 设计边界回归：adapt 回写与人设真相源、humanizer 只针对中文恋爱腔、care 依恋差异化、trends 取舍、multimodal 由关心方式推风格 |
+| `test_v8.py` | 排查整改固化：坏数据降级不抛异常、settings 预算/衰减/采集开关真实生效、空数据目录首轮不崩 |
+| `test_density.py` | 密度校准：结构腔超了压、微标记少了补、恋人专项层、与硬红线互不干扰 |
+| `test_knowledge.py` | 知识库结构与索引完整、单份体量上限、三条硬规矩在文、危机文件不写具体热线号 |
+| `test_strategy.py` | 军师模式：默认关闭、与人设互斥、文档里的边界不能删 |
+| `test_release.py` | 发布门禁：许可证一致、GBK 控制台不崩、版本号/合规声明/指令手册/测试数量四处不打架 |
 
 全程使用临时数据目录，不触碰用户真实数据。

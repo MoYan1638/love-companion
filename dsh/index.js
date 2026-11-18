@@ -1,11 +1,12 @@
-// love-companion - DSH plugin bridge (v2.1.0+)
+// love-companion - DSH plugin bridge (v2.4.6)
 // (c) 2026 MoYan1638
 // https://github.com/MoYan1638/love-companion
 // Licensed under the CC BY-NC 4.0 License. See the LICENSE file for details.
 //
 // 分层架构：
 // - Python 核心（scripts/manager.py + pipeline/orchestrator.py）：纯工具层，
-//   人设 CRUD / 六类记忆 / 情绪识别 / 主动关怀，全部离线重处理
+//   人设 CRUD / 六类记忆 / 情绪与依恋识别 / 人格蒸馏 / 主动关怀 / 三道文风守门，
+//   以及 knowledge（怎么接才对）与 strategy（该进还是该退）两层判断材料，全部离线重处理
 // - DSH 插件 Host（本文件）：系统提示注入 + 可选 settings 命名空间
 //   * ctx.systemPrompt.section 注入 AI 工作指引（可选服务，缺失不阻塞）
 //   * ctx.settings.register('love-companion') 官方设置命名空间
@@ -35,7 +36,7 @@ const SECTION_NAME = "plugin:love-companion";
 const SECTION_ORDER = 100;
 
 // AI 工作指引（模型可见的能力说明）
-const COMPANION_GUIDANCE = `本机已安装 AI 陪伴技能 love-companion。能力：多轮情感对话、用户自定义人设配置（姓名/昵称/性别/性格/背景）、长时记忆存储与检索、情绪识别与反馈、预设人设模板套用、配置导入导出。当用户提及「恋人 / 男/女朋友 / 情感陪伴 / 人设 / 角色扮演 / 情感对话」时即指本技能。所有对话均为 AI 生成的角色扮演内容，不代表真实人际关系；启用前需确认用户已满 18 周岁。数据全部存储在本地设备（~/.love-companion/data），不上传。`;
+const COMPANION_GUIDANCE = `本机已安装 AI 陪伴技能 love-companion。能力：多轮情感对话、用户自定义人设配置（姓名/昵称/性别/性格/背景）、从聊天记录蒸馏专属人格、长时记忆存储与检索、情绪与依恋类型识别、预设人设模板套用、回复的文风与多轮节奏守门、低落/纪念日/深夜时主动开口、判断层知识库（依恋/情绪承接/冲突修复/边界与同意/危机转介/关系节奏/信号误读）、可选军师模式（默认关闭，顾问口吻回答「对方什么意思/这句怎么回/要不要继续」）、配置导入导出。当用户提及「恋人 / 男/女朋友 / 情感陪伴 / 人设 / 角色扮演 / 情感对话 / 这句怎么回 / 要不要继续」时即指本技能。所有对话均为 AI 生成的角色扮演内容，不代表真实人际关系；仅限已满 18 周岁，启用前需确认用户年龄，未确认时不加载任何人设与记忆。数据全部存储在本地设备（~/.love-companion/data），不上传。`;
 
 // DSH 插件默认导出：接收 ctx 上下文
 export default function apply(ctx) {

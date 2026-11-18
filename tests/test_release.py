@@ -14,6 +14,7 @@
 
 import json
 import os
+import re
 import subprocess
 import sys
 import tempfile
@@ -79,6 +80,60 @@ class TestWindowsConsole(unittest.TestCase):
         proc = self._run_with_persona("utf-8")
         self.assertEqual(proc.returncode, 0)
         self.assertIn("好呀😊", proc.stdout.decode("utf-8", "replace"))
+
+
+class TestDocConsistency(unittest.TestCase):
+    """文档之间不许互相矛盾——对外发布时，每个人只会看到其中一页
+
+    这三类矛盾都真实出现过：版本号三个地方各写各的、合规声明只写进了
+    README 而手册里没有、SKILL.md 教了 13 条指令但「完整指令手册」里查不到。
+    """
+
+    def _version(self) -> str:
+        return json.loads((ROOT / "package.json").read_text(encoding="utf-8"))["version"]
+
+    def test_version_matches_everywhere(self):
+        ver = self._version()
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        self.assertIn(f"version: {ver}", skill, "SKILL.md 的 version 与 package.json 不一致")
+        readme = (ROOT / "README.md").read_text(encoding="utf-8")
+        self.assertIn(f"Version-{ver}-", readme, "README 版本徽章没跟上")
+
+    def test_public_docs_state_age_gate(self):
+        """年龄门槛是对外承诺，不能只写在首页"""
+        for name in ("README.md", "SKILL.md",
+                     os.path.join("references", "commands.md"),
+                     os.path.join("references", "instructions.md")):
+            with self.subTest(file=name):
+                text = (ROOT / name).read_text(encoding="utf-8")
+                self.assertRegex(text, r"18\s*周岁", f"{name} 没写 18+ 门槛")
+
+    def test_commands_manual_covers_skill_commands(self):
+        """SKILL.md 教的每条指令，手册里都得查得到——手册标题写着「完整」"""
+        skill = (ROOT / "SKILL.md").read_text(encoding="utf-8")
+        manual = (ROOT / "references" / "commands.md").read_text(encoding="utf-8")
+        cmds = set(re.findall(r"`(/恋人[^`\]\s]*)", skill))
+        cmds |= set(re.findall(r"`(/查看记忆|/删除记忆)", skill))
+        self.assertTrue(cmds, "没从 SKILL.md 抽到任何指令，正则失效了")
+        missing = sorted(c for c in cmds if c not in manual)
+        self.assertFalse(missing, "完整指令手册里缺：" + "、".join(missing))
+
+    def test_dsh_bridge_not_stale(self):
+        """dsh/index.js 会在系统提示里自报版本与能力，过期等于对模型说谎"""
+        ver = self._version()
+        js = (ROOT / "dsh" / "index.js").read_text(encoding="utf-8")
+        self.assertIn(f"v{ver}", js, "dsh/index.js 头部版本号过期")
+        self.assertIn("军师模式", js, "dsh/index.js 的能力说明没跟上 v2.4")
+
+    def test_docs_test_count_matches_reality(self):
+        """README 拿测试数量当质量背书，就必须是真的——写多了是吹牛，写少了是白干"""
+        total = 0
+        for path in sorted((ROOT / "tests").glob("test_*.py")):
+            total += len(re.findall(r"^    def test_", path.read_text(encoding="utf-8"), re.M))
+        for name in ("README.md", "SKILL.md", os.path.join("docs", "architecture.md")):
+            with self.subTest(file=name):
+                self.assertIn(f"{total} 项", (ROOT / name).read_text(encoding="utf-8"),
+                              f"{name} 的测试数量与实际的 {total} 项不一致")
 
 
 if __name__ == "__main__":
