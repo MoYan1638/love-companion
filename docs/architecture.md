@@ -102,6 +102,9 @@ love-companion/
 ├── README.md
 ├── LICENSE
 ├── references/               # 人设预设（唯一数据源）、指令手册、教程
+│   ├── dialogue-playbook.md  # 对话标本（M4.6，判「长什么样」）
+│   ├── knowledge/            # 判断层知识库（v2.3，判「对不对」，9 份按需加载）
+│   └── strategy/             # 军师模式（v2.4，可选默认关闭，顾问口吻与扮演互斥）
 ├── docs/
 │   └── architecture.md       # 本文件
 ├── tests/

@@ -7,10 +7,10 @@
 **给任何AI装上恋人模式 · 8种人设一键切换 · 开源免费**
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/deed.zh)
-[![Version](https://img.shields.io/badge/Version-2.3.0-ff69b4)]()
+[![Version](https://img.shields.io/badge/Version-2.4.0-ff69b4)]()
 [![Skill Type](https://img.shields.io/badge/Type-AI%20Skill-blueviolet)]()
 [![Presets](https://img.shields.io/badge/Presets-8-pink)]()
-[![Tests](https://img.shields.io/badge/Tests-350%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/Tests-363%20passing-brightgreen)]()
 
 *一个通用的 AI 恋人角色扮演技能包，即插即用，适配任意 AI Agent 框架*
 
@@ -94,6 +94,7 @@
 | 💗 **恋人式用户理解** | 流式采集**只存特征不存原文**；依恋类型识别（焦虑型/回避型/安全型/恐惧型）并差异化关怀 |
 | 🗂️ **六类记忆系统** | 事实/偏好/里程碑/共享事件/情绪/人设特征六类归档，语义+时间+重要性多路召回，随时间自然衰减 |
 | 🎀 **主动关怀** | 冷却/静默时段/频次三道闸门；低落、纪念日、深夜、久未联系四类信号主动开口 |
+| 🎯 **军师模式（可选）** | 不是所有人都想要一个恋人——有人的诉求是「她什么意思」「这句怎么回」「要不要继续」。默认关闭，开启后走顾问口吻：**不读人设、不读恋人记忆**。判断五步（情绪落地→事实拆分→利益判断→明确建议→行动收束）、七种主策略只选一个、三档口吻与三分支、投入失衡/多人选择/退出、可选关系档案。不教操控、不替人做决定、明确拒绝就停 |
 | 📚 **判断层知识库** | 九份按需加载：证据分级、依恋在对话里的样子、情绪承接分寸、冲突修复、边界与同意、危机转介、关系节奏与依赖、信号误读清单。管「对不对」，与管「像不像」的三道守门分工明确 |
 | 🗣️ **语气后处理** | 回复贴合对方语气，拦下中文恋爱对话里的 AI 腔（空洞安慰、客服式共情等）；再按**占比**检查多轮节奏——每轮都在问、每条都超 30 字、长句连发轰炸，都会被挡下 |
 | 🌤️ **趋势感知** | 把离线抓到的热点提炼成**一句能开口的话**，按「适不适合跟恋人聊」取舍 |
@@ -196,7 +197,7 @@ love-companion/
 │   ├── 📁 multimodal/       # 配图计划
 │   ├── 📁 panel/            # 可解释面板 + 控制开关
 │   └── 📁 migrate/          # v1 → v2 无损迁移
-├── 📁 tests/                # 350 项回归测试（覆盖 v1 兼容与 v2 全流程）
+├── 📁 tests/                # 363 项回归测试（覆盖 v1 兼容与 v2 全流程）
 ├── 📁 docs/
 │   └── 📐 architecture.md   # 架构设计（在线/离线边界、设计取舍、数据可靠性）
 └── 📁 references/
@@ -204,7 +205,8 @@ love-companion/
     ├── 📖 instructions.md   # 详细使用教程
     ├── 🎭 personas.md       # 8套预设人设模板
     ├── 💬 dialogue-playbook.md  # 对话标本：十段整段对话 + 坏好对照 + 三条禁忌
-    └── 📚 knowledge/        # 知识库：为什么 + 分寸（9 份，按需加载）
+    ├── 📚 knowledge/        # 知识库：为什么 + 分寸（9 份，按需加载）
+    └── 🎯 strategy/         # 军师模式：判断 + 策略（5 份，可选，默认关闭）
 ```
 
 > 零第三方依赖，只用 Python 标准库——不需要装任何东西，克隆即可用。
@@ -357,7 +359,7 @@ python scripts/trends/store.py digest              # 查看趋势知识库摘要
 python -m unittest discover -s tests -t .
 ```
 
-350 项回归测试，覆盖 v1 兼容、v2 各模块、数据可靠性与 CLI 冒烟。
+363 项回归测试，覆盖 v1 兼容、v2 各模块、数据可靠性与 CLI 冒烟。
 
 ---
 

@@ -27,7 +27,7 @@ from scripts.core.storage import write_json  # noqa: E402
 
 # 可开关的模块（与 schema.settings_template()["模块开关"] 对应）
 MODULES = ("记忆系统", "人格克隆", "用户理解", "语气后处理",
-           "主动关怀", "趋势感知", "多模态", "可解释面板")
+           "主动关怀", "趋势感知", "多模态", "可解释面板", "军师模式")
 
 VOICE_LEVELS = ("关闭", "轻柔", "标准", "深度")
 
