@@ -69,8 +69,10 @@ _QUESTION_MARKS = ("？", "?")
 # 断句标点：一律换成空格（第 6 条）。语气零件（…—（）「」等）不在其中，必须留。
 _BREAK_PUNCT = "。，、；：！？,.;:!?"
 
-# 单条字数上限：一句十字顶天，十二是留了余量的线（与 style/typography.py 同口径）
+# 单条字数目标：一句十字顶天，十二是留了余量的线（与 style/typography.py 同口径）。
+# 不是卡死的线：偶少一句十三四字也自然，超过硬上限才真的必须拆。
 MAX_LINE_CHARS = 12
+MAX_LINE_HARD = 20
 
 
 def _tidy(text: str) -> str:
@@ -140,10 +142,11 @@ def split_messages(text: str, max_parts: int = 4) -> List[str]:
     仍然兼容带标点的旧输入（外部传入的话术不一定过过 `_tidy`）。
 
     两道：
-    1. **只在空格处断**。单个片段超 12 字才硬切——半字切会造出「我一直记着 我」
-       这种半句，比超长更难看。
+    1. **只在空格处断**。单个片段不超过硬上限（20 字）就整句保留——
+       日常一条十来字，但一句十三四字也是自然的，为凑十字把它腰斩反而难看。
+       只有超硬上限才硬切，两段以内均分。
     2. **条数上限**。拆多了会刷屏，超过 `max_parts` 就把最短的相邻两条并起来。
-       并回来那一条可以略超 12 字：宁可长一点，也不要发八条。
+       并回来那一条可以略超十二：宁可长一点，也不要发八条。
     """
     src = _tidy(text or "")
     if not src:
@@ -151,7 +154,7 @@ def split_messages(text: str, max_parts: int = 4) -> List[str]:
     words = [p for p in src.split(" ") if p]
     segs: List[str] = []
     for w in words:
-        segs.extend(_split_len(w, MAX_LINE_CHARS))
+        segs.extend(_split_len(w, MAX_LINE_HARD))
 
     groups: List[str] = []
     for seg in segs:

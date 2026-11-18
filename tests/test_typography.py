@@ -83,12 +83,17 @@ class TestSplitByLength(unittest.TestCase):
         self.assertEqual(len(parts), 3)
         self.assertEqual("".join(parts), "啊" * 90)
 
+    def test_long_single_word_kept_until_hard_max(self):
+        """13 字的一句是自然的，不为凑十字腰斩；超硬上限才拆"""
+        self.assertEqual(typography.split_by_length("啊" * 13), ["啊" * 13])
+        self.assertEqual(typography.split_by_length("啊" * 20), ["啊" * 20])
+
     def test_hard_split_balances_two_pieces(self):
-        """13 字上限 12，不能切成 12+1（读起来像手滑），要均分"""
-        parts = typography.split_by_length("啊" * 13, 12)
+        """23 字超硬上限，不能切成 20+3（读起来像手滑），要均分"""
+        parts = typography.split_by_length("啊" * 23)
         self.assertEqual(len(parts), 2)
-        self.assertEqual("".join(parts), "啊" * 13)
-        self.assertLessEqual(max(len(p) for p in parts), 8)
+        self.assertEqual("".join(parts), "啊" * 23)
+        self.assertLessEqual(max(len(p) for p in parts), 14)
 
     def test_empty(self):
         self.assertEqual(typography.split_by_length("", 40), [])
@@ -120,6 +125,15 @@ class TestAudit(unittest.TestCase):
         r = typography.audit("先别说话 靠一下")
         self.assertTrue(r["ok"], r["issues"])
         self.assertEqual(r["parts"], 1)
+
+    def test_slightly_long_is_note_not_issue(self):
+        """十五字偶尔可以——软硬双限：超目标记 note，超硬上限才算违规"""
+        r = typography.audit("我听你说项目很紧就想让你别硬撑")
+        self.assertTrue(r["ok"], r["issues"])
+        self.assertTrue(r["notes"], r)
+        r2 = typography.audit("今天听你说话就觉得有点累了想让你早点去躺一会儿休息")
+        self.assertFalse(r2["ok"], r2["issues"])
+        self.assertFalse(r2["notes"], r2)
 
 
 class TestFormatReply(unittest.TestCase):
@@ -190,6 +204,7 @@ class TestSettingsWiring(unittest.TestCase):
         style = schema.settings_template()["回复风格"]
         self.assertTrue(style["无标点"], "默认应该是「不带标点」，这是聊天窗里的常态")
         self.assertEqual(style["单条字数上限"], 12, "一条十字顶天，留两字余量给语气词")
+        self.assertEqual(style["单条硬上限"], 20, "硬上限才是真的必须拆的线")
         self.assertFalse(style["短回应句号"], "短回应默认不加句号，要加自己开")
 
     def test_legacy_settings_get_migrated(self):

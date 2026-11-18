@@ -192,6 +192,8 @@ class TestReplyRuleAlignment(unittest.TestCase):
         self.assertIn("十个字顶天", text, "第 8 条要写清「一句十个字顶天」")
         self.assertIn(f"默认 {typography.DEFAULT_MAX_CHARS}",
                       text, "文档里的字数上限与代码不一致")
+        self.assertIn(f"硬上限 {typography.DEFAULT_HARD_MAX}",
+                      text, "软硬双限里的硬上限要在文档里出现")
         self.assertIn("短回应句号", text, "短回应句号这个开关要在文档里出现")
         self.assertIn(f"≤ {typography.SHORT_REPLY_MAX} 字",
                       text, "文档里的短回应字上限与代码不一致")

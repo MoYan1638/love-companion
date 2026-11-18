@@ -63,6 +63,7 @@ def _migrate(raw: Dict[str, Any]) -> Dict[str, Any]:
     if isinstance(style, dict) and "短回应句号" not in style:
         if style.get("单条字数上限") == _LEGACY_REPLY_MAX:
             style["单条字数上限"] = 12
+        style.setdefault("单条硬上限", 20)
     return raw
 
 

@@ -162,6 +162,11 @@ class VoiceTests(unittest.TestCase):
                 bad = [ch for ch in p if ch in "。，、；：！？,.;:!?"]
                 self.assertEqual(bad, [], f"{level}: {p}")
 
+    def test_slightly_long_sentence_kept_whole(self):
+        """十三四字的一句整句保留，标准档硬上限是 18（12+6）"""
+        out = split_short("我听你说项目很紧就想让你别硬撑 多喝点水")
+        self.assertIn("我听你说项目很紧就想让你别硬撑", out, out)
+
     def test_shape_lines_stay_short(self):
         """一条十来字（第 8 条）：碎碎念是多条短句，不是一条长句"""
         text = "今天辛苦啦，我听你说项目很紧，先别硬撑，喝口热水，早点休息，我在这儿陪着你。"

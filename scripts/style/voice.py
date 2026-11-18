@@ -31,12 +31,13 @@ def split_short(text: str, max_len: int = 12) -> List[str]:
     - 仍过长的按逗号再切
     - **不补标点**：补句号等于把刚删掉的标点又加回来
 
-    默认 12 字与 `style/typography.py` 的「一条十字顶天」同口径。
+    `max_len` 是日常目标，不是卡死的线：单个短句不超过 `max_len + 6` 就整句保留，
+    为凑十字把一句十三四字腰斩反而难看（第 8 条的软硬双限，同 typography.py）。
     """
     text = (text or "").strip()
     if not text:
         return []
-
+    hard = max_len + 6
     segs = [s.strip() for s in _SENT_SPLIT.split(text) if s.strip()]
     if len(segs) <= 1 and _SPACED.search(text):
         segs = [s for s in _SPACED.split(text) if s]
@@ -46,7 +47,7 @@ def split_short(text: str, max_len: int = 12) -> List[str]:
         seg = seg.strip()
         if not seg:
             continue
-        if len(seg) <= max_len:
+        if len(seg) <= hard:
             pieces.append(seg)
             continue
         buf = ""

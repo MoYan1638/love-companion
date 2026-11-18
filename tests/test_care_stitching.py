@@ -126,6 +126,13 @@ class TestSplitMessages(unittest.TestCase):
                     self.assertLessEqual(len(p), t.MAX_LINE_CHARS,
                                          f"{kind}/{att}: {p}")
 
+    def test_slightly_long_segment_kept_whole(self):
+        """十三四字的一句是自然的，不为凑十二字腰斩；硬上限 20 才拆"""
+        parts = t.split_messages("听你说话就觉得有点累了 先去躺会儿")
+        self.assertIn("听你说话就觉得有点累了", parts, parts)
+        parts2 = t.split_messages("我听你说项目很紧就想让你别硬撑多喝点水早点休息")
+        self.assertGreater(len(parts2), 1, "超硬上限还是要拆")
+
     def test_short_words_get_merged(self):
         """十个字以内就该是一条，别为了「多条」硬拆"""
         self.assertEqual(t.split_messages("先别说话 靠一下 我在"), ["先别说话 靠一下 我在"])

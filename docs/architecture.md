@@ -2,7 +2,7 @@
 
 > 依据：《LoveCompanion_开发与优化交接方案》（内部文档，未随仓库发布）
 > 里程碑拆解见 `../love-companion-v2-里程碑拆解.md`（开发者工作区文档，不在本仓库内）
-> 状态：**M0–M8 全部实现**（2026-09，v2.5.2 迭代中）。427 项回归测试全绿，主分支 `main`。
+> 状态：**M0–M8 全部实现**（2026-09，v2.5.3 迭代中）。431 项回归测试全绿，主分支 `main`。
 
 ## 实施记录（一句话）
 
@@ -25,7 +25,8 @@ v1 的 8 套人设、`/恋人…` 指令、manager.py API、数据目录全部�
 | 军师模式 | 「这句怎么回 / 要不要继续」——顾问口吻，与扮演互斥，默认关闭 | `references/strategy/` |
 | 回复十条 | 发之前的通用规矩：先接情绪、接住上一句、说人话、控篇幅、不施压 | `references/reply-rules.md` |
 | 排版成型 | 去掉断句标点用空格隔开、超十二字断条——外形像打字不像写作文 | `scripts/style/typography.py` |
-| 篇幅按「一句」算 | 「控篇幅」不是少说话，是一句话别长：一条十字顶天，说得多就多发几条；碎碎念 = 条数多、句子短 | `scripts/style/typography.py`（12 字）+ `care/templates.py::split_messages`（只在空格处断） |
+| 篇幅按「一句」算 | 「控篇幅」不是少说话，是一句话别长：日常一条十字顶天，说得多就多发几条；碎碎念 = 条数多、句子短 | `scripts/style/typography.py`（目标 12）+ `care/templates.py::split_messages`（只在空格处断） |
+| 软硬双限，不卡死 | 十字是日常常态不是死线：十三四字的一句整句保留，腰斩反而难看；目标 12 只提醒，硬上限 20 才真的拆 | `scripts/style/typography.py` + `scripts/style/voice.py`（max_len+6） |
 | 短回应留一个句号 | 「哦哦。」「嗯嗯。」末尾那个句号是语气不是作文感；默认不加，且只认「三字以内 + 单个末尾句号」 | `scripts/style/typography.py::_SHORT_STOP` |
 | 标点收口 | 模板/后缀/口头禅/拆句各补各的标点必然漏，统一在 `_tidy()` 收；其余三层不生产断句标点 | `scripts/care/templates.py` + `scripts/style/` |
 | 极简注入 | 「能不注入就不注入」的分级预算阶梯 | `scripts/pipeline/injector.py` |
@@ -113,7 +114,7 @@ love-companion/
 ├── SKILL.md                  # 技能主文件（v1 指令体系 + v2 轻注入策略）
 ├── README.md
 ├── LICENSE
-├── package.json              # 版本真相源（2.5.2）+ dsh bundle 声明
+├── package.json              # 版本真相源（2.5.3）+ dsh bundle 声明
 ├── cordis.patch.yml          # dsh bundle 补丁层
 ├── dsh/
 │   └── index.js              # DSH 插件桥接：系统提示注入 + settings 命名空间（可选加载）
@@ -124,7 +125,7 @@ love-companion/
 │   └── strategy/             # 军师模式（v2.4，可选默认关闭，顾问口吻与扮演互斥）
 ├── docs/
 │   └── architecture.md       # 本文件
-├── tests/                    # 427 项回归，全部走 unittest（零依赖）
+├── tests/                    # 431 项回归，全部走 unittest（零依赖）
 │   ├── test_manager.py       # v1 能力 + v2 schema/迁移
 │   ├── test_v2.py            # M1 + M2
 │   ├── test_v3.py            # M3b + M4

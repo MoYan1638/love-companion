@@ -59,8 +59,11 @@ TERMINAL = "。，、；：！？,.;:!?"
 # 语气零件：删了语义会变，必须保留
 KEEP = "…—（）()「」“”‘’《》〈〉～~·"
 
-# 一条消息的字数上限：一句十字顶天，留两字余量给语气词和 emoji
+# 一条消息的字数目标：一句十字顶天，留两字余量给语气词和 emoji。
+# 这是**日常的常态，不是卡死的线**——有时话多一点，十几字也能接受；
+# 超过硬上限（DEFAULT_HARD_MAX）才真的必须拆。
 DEFAULT_MAX_CHARS = 12
+DEFAULT_HARD_MAX = 20
 
 # 短回应：整条不超过这么多字、且只有一个末尾句号时，可以选择保留那个句号
 # 定在 3 是有意的：「哦哦。」「嗯嗯。」「呃。」「好的。」都是语气词级别；
@@ -74,7 +77,7 @@ def strip_punct(text: str, keep_short_stop: bool = False) -> str:
 
     `keep_short_stop=True` 时保留「哦哦。」「嗯嗯。」这类**短回应的末尾句号**——
     那是语气不是断句，删了会变成「哦哦」，冷淡的分寸差一点。
-    只认「整条 ≤4 字 + 只有一个末尾句号」，多一个字或句中还有标点就不算。
+    只认「整条 ≤3 字 + 只有一个末尾句号」，多一个字或句中还有标点就不算。
 
     >>> strip_punct("我在。你说。")
     '我在 你说'
@@ -96,17 +99,22 @@ def strip_punct(text: str, keep_short_stop: bool = False) -> str:
     return out.strip(" \t")
 
 
-def split_by_length(text: str, max_chars: int = DEFAULT_MAX_CHARS) -> List[str]:
+def split_by_length(text: str, max_chars: int = DEFAULT_MAX_CHARS,
+                    hard_max: int = DEFAULT_HARD_MAX) -> List[str]:
     """按长度切条，优先在空格处断（第 8 条）
 
-    空格是上一步留下的断点，在那里断开最不破坏语气；
-    单个词就超长时只能硬切，否则会产出一条永远发不出去的消息。
+    `max_chars` 是**合并目标**：把空格隔开的短句往一条里装，装到十二字左右为止。
+    `hard_max` 是**真的上限**：单个短句只要不超过它就整句保留，不为凑十字
+    把一句话腰斩——日常聊天一般十来字，但有时一句十三四个字也是自然的，
+    切成两半反而难看。超过 hard_max 才硬切。
     """
     src = (text or "").strip()
     if not src:
         return []
     if max_chars <= 0:
         return [src]
+    if hard_max < max_chars:
+        hard_max = max_chars
     parts: List[str] = []
     cur = ""
     for word in src.split():
@@ -117,7 +125,7 @@ def split_by_length(text: str, max_chars: int = DEFAULT_MAX_CHARS) -> List[str]:
         else:
             parts.append(cur)
             cur = word
-        if len(cur) > max_chars:
+        if len(cur) > hard_max:
             pieces = _hard_split(cur, max_chars)
             parts.extend(pieces[:-1])
             cur = pieces[-1]
@@ -129,8 +137,8 @@ def split_by_length(text: str, max_chars: int = DEFAULT_MAX_CHARS) -> List[str]:
 def _hard_split(word: str, max_chars: int) -> List[str]:
     """没有空格可断时只能硬切，但**两段以内就均分**
 
-    13 字上限 12，硬切会剩一个孤零零的单字（12+1），读起来像手滑。
-    均分成 7+6 才是人能发出去的样子。
+    二十一字上限十二，硬切会剩一个孤零零的九字尾，读起来像手滑。
+    均分成 11+10 才是人能发出去的样子。
     """
     out: List[str] = []
     rest = word
@@ -148,11 +156,15 @@ def _hard_split(word: str, max_chars: int) -> List[str]:
 
 
 def audit(text: str, max_chars: int = DEFAULT_MAX_CHARS,
+          hard_max: int = DEFAULT_HARD_MAX,
           keep_short_stop: bool = False) -> Dict[str, Any]:
     """体检：这条回复还差哪几条规矩（只报 6、8 两条，其余是语义层，机械判不了）
 
     第 8 条判的是「原文一条有多长」，不是断条后有多长——断条是补救手段，
     需要补救就说明这一条本来就不该这么长。
+
+    超过目标但没过硬上限的，记进 `notes` 提醒一下，不算违规——
+    日常十条里九条是短句，偶尔一条长点，卡死会显得像机器人。
     """
     src = (text or "").strip()
     if keep_short_stop and _SHORT_STOP.match(src):
@@ -160,17 +172,22 @@ def audit(text: str, max_chars: int = DEFAULT_MAX_CHARS,
     else:
         punct = [ch for ch in src if ch in TERMINAL]
     flat = strip_punct(src, keep_short_stop=keep_short_stop).rstrip("。")
-    chunks = split_by_length(flat, max_chars)
+    chunks = split_by_length(flat, max_chars, hard_max=hard_max)
     longest = max((len(c) for c in chunks), default=0)
     issues: List[str] = []
+    notes: List[str] = []
     if punct:
         issues.append(f"带了 {len(punct)} 处断句标点（第 6 条）")
-    if len(flat) > max_chars:
+    if len(flat) > hard_max:
         issues.append(
-            f"整条 {len(flat)} 字，超过 {max_chars}，会断成 {len(chunks)} 条（第 8 条）")
+            f"整条 {len(flat)} 字，超过硬上限 {hard_max}，会断成 {len(chunks)} 条（第 8 条）")
+    elif len(flat) > max_chars:
+        notes.append(
+            f"整条 {len(flat)} 字，比日常的 {max_chars} 略长；偶尔可以，别每条都这样")
     return {
         "ok": not issues,
         "issues": issues,
+        "notes": notes,
         "punct": len(punct),
         "chars": len(flat),
         "longest": longest,
@@ -181,7 +198,7 @@ def audit(text: str, max_chars: int = DEFAULT_MAX_CHARS,
 def style_config(data_dir: Optional[str] = None) -> Dict[str, Any]:
     """读 `回复风格` 设置；读不到就用默认值，绝不抛异常打断发送"""
     cfg = {"无标点": True, "单条字数上限": DEFAULT_MAX_CHARS,
-           "短回应句号": False}
+           "单条硬上限": DEFAULT_HARD_MAX, "短回应句号": False}
     try:
         from scripts.core import settings as core_settings
         got = (core_settings.load(data_dir) or {}).get("回复风格") or {}
@@ -198,23 +215,26 @@ def style_config(data_dir: Optional[str] = None) -> Dict[str, Any]:
 
 def format_reply(text: str, no_punct: Optional[bool] = None,
                  max_chars: Optional[int] = None,
+                 hard_max: Optional[int] = None,
                  short_stop: Optional[bool] = None,
                  data_dir: Optional[str] = None) -> List[str]:
     """一条回复 → 若干条可发送消息
 
-    `no_punct` / `max_chars` / `short_stop` 传 None 时读设置；显式传值则以此为准
-    （测试与临时覆盖用）。
+    `no_punct` / `max_chars` / `hard_max` / `short_stop` 传 None 时读设置；
+    显式传值则以此为准（测试与临时覆盖用）。
     """
     cfg = style_config(data_dir)
     if no_punct is None:
         no_punct = bool(cfg["无标点"])
     if max_chars is None:
         max_chars = cfg["单条字数上限"]
+    if hard_max is None:
+        hard_max = cfg["单条硬上限"]
     if short_stop is None:
         short_stop = bool(cfg["短回应句号"])
     src = (strip_punct(text, keep_short_stop=short_stop) if no_punct
            else re.sub(r"\s+", " ", (text or "")).strip())
-    return split_by_length(src, max_chars)
+    return split_by_length(src, max_chars, hard_max=hard_max)
 
 
 def main(argv: List[str]) -> int:
