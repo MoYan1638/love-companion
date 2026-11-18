@@ -83,8 +83,15 @@ def _emotion_stop(src: str) -> bool:
     return bool(body) and not any(ch in TERMINAL for ch in body)
 
 
+# 情绪段落：走心长段的逗号是叙述不是断句——「没事的，我没怪你」硬拆成空格短句反而怪。
+# 这个例外**默认关**：逗号比句号常见得多，默认留会被习惯带标点的写法掏空第 6 条；
+# 由写话层认定「这一段是认真长段」时显式传 keep_commas=True（或开设置 情绪逗号）。
+COMMA = "，,"
+
+
 def strip_punct(text: str, keep_short_stop: bool = False,
-                keep_emotion_stop: bool = True) -> str:
+                keep_emotion_stop: bool = True,
+                keep_commas: bool = False) -> str:
     """去掉断句标点，用空格隔开（第 6 条）
 
     `keep_short_stop=True` 时额外保留「哦哦。」「嗯嗯。」这类**极短回应的末尾句号**。
@@ -92,6 +99,8 @@ def strip_punct(text: str, keep_short_stop: bool = False,
     **认真收住的短句**的末尾句号——那是情绪开关，不是断句；日常闲聊本来就不带，
     所以保留它不会破坏无标点的常态，反而是把写话那一层特意点的句号留住。
     句中还有别的断句标点就不算，照常清空格。
+    `keep_commas=True` 时连逗号也留——那是**认真长段**的叙述，
+    「没事的，我没怪你」拆成空格短句反而怪；默认关，写话层显式传。
 
     >>> strip_punct("我在。你说。")
     '我在 你说'
@@ -101,6 +110,8 @@ def strip_punct(text: str, keep_short_stop: bool = False,
     '没事。'
     >>> strip_punct("没事。", keep_emotion_stop=False)
     '没事'
+    >>> strip_punct("没事的，我没怪你", keep_commas=True)
+    '没事的，我没怪你'
     >>> strip_punct("哦哦。", keep_short_stop=True)
     '哦哦。'
     """
@@ -111,7 +122,8 @@ def strip_punct(text: str, keep_short_stop: bool = False,
         return src
     if keep_short_stop and _SHORT_STOP.match(src):
         return src
-    out = "".join(" " if ch in TERMINAL else ch for ch in src)
+    out = "".join(" " if (ch in TERMINAL and not (keep_commas and ch in COMMA))
+                  else ch for ch in src)
     out = out.replace("\r", " ").replace("\n", " ")
     out = re.sub(r"[ \t]{2,}", " ", out)
     return out.strip(" \t")
@@ -173,10 +185,42 @@ def _hard_split(word: str, max_chars: int) -> List[str]:
     return out
 
 
+def _pack_comma_text(src: str, max_chars: int,
+                     hard_max: int) -> List[str]:
+    """认真长段：逗号留在原地，按逗号归拢到十二字左右一条
+
+    「科三跟科二不一样，科二是固定的，科三是几条完全不一样的路线随机抽的」
+    → ['科三跟科二不一样，科二是固定的', '科三是几条完全不一样的路线随机抽的']。
+    逗号不能丢（丢了叙述感就没了），但单条仍守硬上限——
+    单个分句超了就硬切，两段以内均分，跟空格版同一个手感。
+    """
+    clauses = [c.strip() for c in re.split(r"[，,]", src) if c.strip()]
+    if not clauses:
+        return []
+    parts: List[str] = []
+    cur = ""
+    for c in clauses:
+        if not cur:
+            cur = c
+        elif len(cur) + 1 + len(c) <= max_chars:
+            cur = f"{cur}，{c}"
+        else:
+            parts.append(cur)
+            cur = c
+        if len(cur) > hard_max:
+            pieces = _hard_split(cur, max_chars)
+            parts.extend(pieces[:-1])
+            cur = pieces[-1]
+    if cur:
+        parts.append(cur)
+    return [p for p in parts if p]
+
+
 def audit(text: str, max_chars: int = DEFAULT_MAX_CHARS,
           hard_max: int = DEFAULT_HARD_MAX,
           keep_short_stop: bool = False,
-          keep_emotion_stop: bool = True) -> Dict[str, Any]:
+          keep_emotion_stop: bool = True,
+          keep_commas: bool = False) -> Dict[str, Any]:
     """体检：这条回复还差哪几条规矩（只报 6、8 两条，其余是语义层，机械判不了）
 
     第 8 条判的是「原文一条有多长」，不是断条后有多长——断条是补救手段，
@@ -187,16 +231,23 @@ def audit(text: str, max_chars: int = DEFAULT_MAX_CHARS,
 
     「没事。」这种只有一个末尾句号的也不算违规，记 note：那是情绪开关，
     认真收住的一句可以留；但日常不该带，所以留了要被提醒一句「别每条都带」。
+
+    `keep_commas=True` 时逗号不算违规，记 note：认真长段的叙述随它去，
+    但说完那段要回到短句空格，别变成新常态。
     """
     src = (text or "").strip()
     emotion = keep_emotion_stop and _emotion_stop(src)
+    punct = [ch for ch in src if ch in TERMINAL]
+    if keep_commas:
+        punct = [ch for ch in punct if ch not in COMMA]
     if (keep_short_stop and _SHORT_STOP.match(src)) or emotion:
-        punct: List[str] = []
-    else:
-        punct = [ch for ch in src if ch in TERMINAL]
+        punct = []
     flat = strip_punct(src, keep_short_stop=keep_short_stop,
-                       keep_emotion_stop=keep_emotion_stop).rstrip("。")
-    chunks = split_by_length(flat, max_chars, hard_max=hard_max)
+                       keep_emotion_stop=keep_emotion_stop,
+                       keep_commas=keep_commas).rstrip("。")
+    chunks = (_pack_comma_text(flat, max_chars, hard_max)
+              if keep_commas and any(ch in COMMA for ch in flat)
+              else split_by_length(flat, max_chars, hard_max=hard_max))
     longest = max((len(c) for c in chunks), default=0)
     issues: List[str] = []
     notes: List[str] = []
@@ -204,6 +255,8 @@ def audit(text: str, max_chars: int = DEFAULT_MAX_CHARS,
         issues.append(f"带了 {len(punct)} 处断句标点（第 6 条）")
     elif emotion:
         notes.append("末尾留了一个句号：认真收住的一句可以，日常闲聊别带")
+    elif keep_commas and any(ch in COMMA for ch in flat):
+        notes.append("逗号留在认真长段里了：说完这段回到短句空格，别变成新常态")
     if len(flat) > hard_max:
         issues.append(
             f"整条 {len(flat)} 字，超过硬上限 {hard_max}，会断成 {len(chunks)} 条（第 8 条）")
@@ -224,7 +277,8 @@ def audit(text: str, max_chars: int = DEFAULT_MAX_CHARS,
 def style_config(data_dir: Optional[str] = None) -> Dict[str, Any]:
     """读 `回复风格` 设置；读不到就用默认值，绝不抛异常打断发送"""
     cfg = {"无标点": True, "单条字数上限": DEFAULT_MAX_CHARS,
-           "单条硬上限": DEFAULT_HARD_MAX, "短回应句号": False, "情绪句号": True}
+           "单条硬上限": DEFAULT_HARD_MAX, "短回应句号": False, "情绪句号": True,
+           "情绪逗号": False}
     try:
         from scripts.core import settings as core_settings
         got = (core_settings.load(data_dir) or {}).get("回复风格") or {}
@@ -244,11 +298,13 @@ def format_reply(text: str, no_punct: Optional[bool] = None,
                  hard_max: Optional[int] = None,
                  short_stop: Optional[bool] = None,
                  emotion_stop: Optional[bool] = None,
+                 keep_commas: Optional[bool] = None,
                  data_dir: Optional[str] = None) -> List[str]:
     """一条回复 → 若干条可发送消息
 
-    `no_punct` / `max_chars` / `hard_max` / `short_stop` / `emotion_stop`
-    传 None 时读设置；显式传值则以此为准（测试与临时覆盖用）。
+    `no_punct` / `max_chars` / `hard_max` / `short_stop` / `emotion_stop` /
+    `keep_commas` 传 None 时读设置；显式传值则以此为准（测试与临时覆盖用）。
+    认真长段（走心解释）传 keep_commas=True：逗号留在原位，按逗号归拢断条。
     """
     cfg = style_config(data_dir)
     if no_punct is None:
@@ -261,9 +317,14 @@ def format_reply(text: str, no_punct: Optional[bool] = None,
         short_stop = bool(cfg["短回应句号"])
     if emotion_stop is None:
         emotion_stop = bool(cfg["情绪句号"])
+    if keep_commas is None:
+        keep_commas = bool(cfg["情绪逗号"])
     src = (strip_punct(text, keep_short_stop=short_stop,
-                       keep_emotion_stop=emotion_stop) if no_punct
+                       keep_emotion_stop=emotion_stop,
+                       keep_commas=keep_commas) if no_punct
            else re.sub(r"\s+", " ", (text or "")).strip())
+    if keep_commas and any(ch in COMMA for ch in src):
+        return _pack_comma_text(src, max_chars, hard_max)
     return split_by_length(src, max_chars, hard_max=hard_max)
 
 

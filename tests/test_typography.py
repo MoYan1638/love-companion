@@ -246,6 +246,50 @@ class TestEmotionStop(unittest.TestCase):
         self.assertEqual(typography.format_reply("没事。", data_dir=data_dir), ["没事"])
 
 
+class TestEmotionalPassage(unittest.TestCase):
+    """情绪逗号：走心长段的例外，默认关
+
+    「没事的，我没怪你」「科三跟科二不一样，科二是固定的」——认真解释的时候
+    逗号是叙述不是断句，拆成空格短句反而怪。但逗号太常见，默认留会把第 6 条
+    掏空，所以由写话层认定「这一段是认真长段」时显式传 keep_commas=True。
+    """
+
+    def test_default_strips_commas(self):
+        self.assertEqual(typography.format_reply("没事的，我没怪你"), ["没事的 我没怪你"])
+
+    def test_keep_commas_keeps_and_packs(self):
+        out = typography.format_reply("科三跟科二不一样，科二是固定的，科三是几条完全不一样的路线随机抽的",
+                                      keep_commas=True)
+        joined = "，".join(out)
+        self.assertNotIn("。", joined)
+        self.assertIn("，", joined)
+        self.assertGreater(len(out), 1, "长段要按逗号归拢成多条")
+        for p in out:
+            self.assertLessEqual(len(p), 20, f"单条仍守硬上限：{p}")
+
+    def test_short_passage_stays_one(self):
+        self.assertEqual(typography.format_reply("没事的，我没怪你", keep_commas=True),
+                         ["没事的，我没怪你"])
+
+    def test_period_inside_passage_still_stripped(self):
+        out = typography.format_reply("没事的，我没怪你。别多想", keep_commas=True)
+        self.assertNotIn("。", "，".join(out))
+
+    def test_audit_passes_with_note(self):
+        r = typography.audit("没事的，我没怪你", keep_commas=True)
+        self.assertTrue(r["ok"], r["issues"])
+        self.assertTrue(any("逗号" in n for n in r["notes"]), r)
+        r2 = typography.audit("没事的，我没怪你")
+        self.assertFalse(r2["ok"], r2["issues"])
+
+    def test_reads_setting(self):
+        data_dir = tempfile.mkdtemp()
+        with open(os.path.join(data_dir, "settings.json"), "w", encoding="utf-8") as fh:
+            json.dump({"回复风格": {"无标点": True, "情绪逗号": True}}, fh, ensure_ascii=False)
+        self.assertEqual(typography.format_reply("没事的，我没怪你", data_dir=data_dir),
+                         ["没事的，我没怪你"])
+
+
 class TestSettingsWiring(unittest.TestCase):
     def test_template_has_reply_style(self):
         style = schema.settings_template()["回复风格"]
@@ -254,6 +298,7 @@ class TestSettingsWiring(unittest.TestCase):
         self.assertEqual(style["单条硬上限"], 20, "硬上限才是真的必须拆的线")
         self.assertFalse(style["短回应句号"], "短回应默认不加句号，要加自己开")
         self.assertTrue(style["情绪句号"], "情绪到了留一个句号是默认允许的，写话那一层自己定")
+        self.assertFalse(style["情绪逗号"], "逗号默认不留——太常见，默认开会把第 6 条掏空")
 
     def test_legacy_settings_get_migrated(self):
         """老 settings.json 存的是旧默认 40 字，深合并会盖掉新默认——要迁到 12"""
