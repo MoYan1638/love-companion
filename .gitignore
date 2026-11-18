@@ -13,3 +13,10 @@ _zip.mjs
 promo/dist/
 promo/logo/_draft/
 promo/logo/_make_*.py
+
+# 本地私名清单：用于自检发布物有没有混进某个人的专属称呼，只留本地
+tests/private_names.local.txt
+
+# 临时文件
+_msg*.txt
+_*.log

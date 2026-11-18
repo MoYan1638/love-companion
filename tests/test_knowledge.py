@@ -92,17 +92,41 @@ class TestKnowledgeBase(unittest.TestCase):
         self.assertIsNone(re.search(r"\d{7,}", text), "出现疑似具体号码")
 
 
+# 本地私名清单：一行一个，用来检查「有没有把某个人的专属称呼写进发布物」。
+# 刻意不入库——把真名当黑名单提交到公开仓库，本身就是一次泄漏。
+# 文件不存在时该项检查自动跳过，别人 clone 下来不会失败。
+PRIVATE_NAMES_FILE = Path(__file__).with_name("private_names.local.txt")
+
+
+def _load_private_names():
+    if not PRIVATE_NAMES_FILE.exists():
+        return []
+    return [ln.strip()
+            for ln in PRIVATE_NAMES_FILE.read_text(encoding="utf-8").splitlines()
+            if ln.strip() and not ln.strip().startswith("#")]
+
+
 class TestGenericToEveryone(unittest.TestCase):
     """发布物是给所有人的，不能混进某一段具体关系的私货"""
 
-    PRIVATE = ("阿岁", "许楹", "贾思颖", "范俊杰", "三蹦子")
-
     def test_no_private_names_in_references(self):
+        names = _load_private_names()
+        if not names:
+            self.skipTest("未提供本地私名清单（tests/private_names.local.txt），跳过")
         for path in (ROOT / "references").rglob("*.md"):
             with self.subTest(file=path.name):
                 text = path.read_text(encoding="utf-8")
-                for name in self.PRIVATE:
+                for name in names:
                     self.assertNotIn(name, text, f"{path} 混入个人化专名「{name}」")
+
+    def test_private_names_file_stays_local(self):
+        """清单必须留在本地——被 git 跟踪就等于把名字公开了"""
+        import subprocess
+        out = subprocess.run(["git", "ls-files", "--", "tests/private_names.local.txt"],
+                             cwd=str(ROOT), capture_output=True, text=True)
+        if out.returncode != 0:
+            self.skipTest("非 git 工作区")
+        self.assertEqual(out.stdout.strip(), "", "私名清单被提交进仓库了")
 
     def test_generic_note_present(self):
         for path in (KB / "00-索引与用法.md", ROOT / "references" / "strategy" / "00-导读与模式边界.md"):

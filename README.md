@@ -7,10 +7,10 @@
 **给任何AI装上恋人模式 · 8种人设一键切换 · 开源免费**
 
 [![License: CC BY-NC 4.0](https://img.shields.io/badge/License-CC%20BY--NC%204.0-lightgrey.svg)](https://creativecommons.org/licenses/by-nc/4.0/deed.zh)
-[![Version](https://img.shields.io/badge/Version-2.4.1-ff69b4)]()
+[![Version](https://img.shields.io/badge/Version-2.4.2-ff69b4)]()
 [![Skill Type](https://img.shields.io/badge/Type-AI%20Skill-blueviolet)]()
 [![Presets](https://img.shields.io/badge/Presets-8-pink)]()
-[![Tests](https://img.shields.io/badge/Tests-366%20passing-brightgreen)]()
+[![Tests](https://img.shields.io/badge/Tests-367%20passing-brightgreen)]()
 
 *一个通用的 AI 恋人角色扮演技能包，即插即用，适配任意 AI Agent 框架*
 
@@ -49,7 +49,7 @@
 ```text
 你：今天不想说话
 温婉：嗯，那就不说。
-你：学校今天有点烦
+你：今天有点烦
 温婉：烦就先放着，不用现在理清
 你：我怕明天也不好
 温婉：明天的事明天看。今晚你先睡，我在
@@ -197,7 +197,7 @@ love-companion/
 │   ├── 📁 multimodal/       # 配图计划
 │   ├── 📁 panel/            # 可解释面板 + 控制开关
 │   └── 📁 migrate/          # v1 → v2 无损迁移
-├── 📁 tests/                # 366 项回归测试（覆盖 v1 兼容与 v2 全流程）
+├── 📁 tests/                # 367 项回归测试（覆盖 v1 兼容与 v2 全流程）
 ├── 📁 docs/
 │   └── 📐 architecture.md   # 架构设计（在线/离线边界、设计取舍、数据可靠性）
 └── 📁 references/
@@ -359,7 +359,7 @@ python scripts/trends/store.py digest              # 查看趋势知识库摘要
 python -m unittest discover -s tests -t .
 ```
 
-366 项回归测试，覆盖 v1 兼容、v2 各模块、数据可靠性与 CLI 冒烟。
+367 项回归测试，覆盖 v1 兼容、v2 各模块、数据可靠性与 CLI 冒烟。
 
 ---
 
